@@ -35,10 +35,10 @@ sankey = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dernestbank/openlca-sankey"
-Documentation = "https://github.com/dernestbank/openlca-sankey/blob/main/README_sankey.md"
-Repository = "https://github.com/dernestbank/openlca-sankey"
-Issues = "https://github.com/dernestbank/openlca-sankey/issues"
+Homepage = "https://github.com/subramaniyasharma/openlca-sankey"
+Documentation = "https://github.com/subramaniyasharma/openlca-sankey/blob/main/README_sankey.md"
+Repository = "https://github.com/subramaniyasharma/openlca-sankey"
+Issues = "https://github.com/subramaniyasharma/openlca-sankey/issues"
 
 [tool.setuptools]
 py-modules = ["generate_sankey"]
