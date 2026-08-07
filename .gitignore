@@ -1,0 +1,28 @@
+# Python cache and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local source data and generated dashboards
+*.xlsx
+*.xls
+dashboard.html
+dashboard_*.html
+sankey_diagram.html
+sankey_diagram_*.html
+*-sankey.html
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local agent and session notes
+AGENTS.md
+docs/SANKEY_SESSION_LOG.md

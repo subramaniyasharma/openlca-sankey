@@ -1,0 +1,44 @@
+# pyproject.toml - openLCA Sankey dashboard packaging configuration
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openlca-sankey"
+version = "0.1.0"
+description = "Generate interactive Sankey dashboards from openLCA contribution-tree Excel exports."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "CRAPL-LICENSE.txt" }
+authors = [
+    {name = "Ernest Boakye Danquah", email = "dernestbanksch@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+keywords = ["openlca", "lca", "life-cycle-assessment", "sankey", "environmental-impact"]
+dependencies = []
+
+[project.optional-dependencies]
+sankey = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "plotly>=5.18.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/dernestbank/openlca-sankey"
+Documentation = "https://github.com/dernestbank/openlca-sankey/blob/main/README_sankey.md"
+Repository = "https://github.com/dernestbank/openlca-sankey"
+Issues = "https://github.com/dernestbank/openlca-sankey/issues"
+
+[tool.setuptools]
+py-modules = ["generate_sankey"]

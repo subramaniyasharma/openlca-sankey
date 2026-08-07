@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>/*{{CSS}}*/</style>
+<!--{{PLOTLY}}-->
+</head>
+<body>
+
+<button id="panel-toggle" class="btn" type="button">Controls</button>
+
+<div class="app">
+  <div class="stage">
+    <div class="stage-bar">
+      <span id="stat-flows"></span>
+      <span class="sep">|</span>
+      <span id="stat-nodes"></span>
+      <span id="stat-extra"></span>
+      <span class="spacer"></span>
+      <span id="stat-gap"></span>
+    </div>
+    <div class="chart-scroll">
+      <div id="chart"></div>
+      <!-- shown only in numbered-label mode: the key that makes short numeric
+           labels usable in a paper -->
+      <section id="node-key" hidden>
+        <div class="key-head">
+          <h2>Process key</h2>
+          <button class="btn" type="button" id="c-copykey">Copy as table</button>
+        </div>
+        <ol id="key-list"></ol>
+      </section>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head">
+      <h1>Diagram controls</h1>
+      <span class="meta" id="meta-source"></span>
+    </div>
+
+    <!-- ── DATA ──────────────────────────────────────────────────────── -->
+    <details class="group" open>
+      <summary>Data</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-levels">Levels</label>
+          <div class="ctl">
+            <input type="range" id="c-levels" min="2" max="7" step="1">
+            <span class="val" id="v-levels"></span>
+          </div>
+        </div>
+        <p class="hint" id="levels-hint"></p>
+
+        <div class="row stack">
+          <label>Small flows</label>
+          <div class="seg" id="c-small">
+            <button type="button" data-value="all">Show all</button>
+            <button type="button" data-value="pool">Pool into "other"</button>
+            <button type="button" data-value="hide">Hide</button>
+          </div>
+        </div>
+
+        <div class="row" id="row-threshold">
+          <label for="c-threshold">Threshold</label>
+          <div class="ctl">
+            <input type="range" id="c-threshold" min="0" max="20" step="0.1">
+            <span class="val" id="v-threshold"></span>
+          </div>
+        </div>
+        <p class="hint">Measured against each flow's own parent, not the root.</p>
+
+        <div class="row">
+          <label for="c-maxnodes">Max nodes</label>
+          <div class="ctl">
+            <input type="range" id="c-maxnodes" min="0" max="300" step="1">
+            <span class="val" id="v-maxnodes"></span>
+          </div>
+        </div>
+        <p class="hint">Keeps only the largest contributors, the way openLCA's
+          own Sankey does. 0 keeps everything.</p>
+
+        <div class="row stack">
+          <label>Root balance</label>
+          <div class="seg" id="c-balance">
+            <button type="button" data-value="off">Unbalanced</button>
+            <button type="button" data-value="on">Add "direct + unresolved"</button>
+          </div>
+        </div>
+        <p class="hint" id="balance-hint"></p>
+      </div>
+    </details>
+
+    <!-- ── TYPOGRAPHY ────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Typography</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-font">Font</label>
+          <div class="ctl">
+            <select id="c-font">
+              <option value='system-ui, -apple-system, "Segoe UI", sans-serif'>System sans</option>
+              <option value="Inter, system-ui, sans-serif">Inter</option>
+              <option value="Arial, Helvetica, sans-serif">Arial</option>
+              <option value="Helvetica, Arial, sans-serif">Helvetica</option>
+              <option value='"Segoe UI", system-ui, sans-serif'>Segoe UI</option>
+              <option value="Roboto, system-ui, sans-serif">Roboto</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+              <option value='"Courier New", monospace'>Courier New</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-fontsize">Base size</label>
+          <div class="ctl">
+            <input type="range" id="c-fontsize" min="8" max="24" step="1">
+            <span class="val" id="v-fontsize"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelsize">Label size</label>
+          <div class="ctl">
+            <input type="range" id="c-labelsize" min="6" max="28" step="1">
+            <span class="val" id="v-labelsize"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelcolor">Label colour</label>
+          <div class="ctl">
+            <input type="color" id="c-labelcolor">
+            <button class="btn" type="button" id="c-labelcolor-auto">Auto</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-hoversize">Hover size</label>
+          <div class="ctl">
+            <input type="range" id="c-hoversize" min="8" max="22" step="1">
+            <span class="val" id="v-hoversize"></span>
+          </div>
+        </div>
+
+        <div class="row stack">
+          <label for="c-title">Title</label>
+          <input type="text" id="c-title">
+        </div>
+        <div class="row">
+          <label for="c-titlesize">Title size</label>
+          <div class="ctl">
+            <input type="range" id="c-titlesize" min="10" max="40" step="1">
+            <span class="val" id="v-titlesize"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-titlealign">Title align</label>
+          <div class="ctl">
+            <select id="c-titlealign">
+              <option value="left">Left</option>
+              <option value="center">Centre</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-titlebold">Bold title</label>
+          <div class="ctl"><input type="checkbox" id="c-titlebold"></div>
+        </div>
+        <p class="hint">Annotations — including any label you detach from a
+          node — can be dragged and retyped directly on the diagram.</p>
+      </div>
+    </details>
+
+    <!-- ── LABELS ────────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Labels</summary>
+      <div class="group-body">
+        <div class="row stack">
+          <label>Show</label>
+          <div class="seg" id="c-labelmode">
+            <button type="button" data-value="name">Name</button>
+            <button type="button" data-value="both">Name+%</button>
+            <button type="button" data-value="pct">%</button>
+            <button type="button" data-value="number">No.</button>
+            <button type="button" data-value="none">None</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelsource">Text</label>
+          <div class="ctl">
+            <select id="c-labelsource">
+              <option value="short">Short name (trimmed at "|")</option>
+              <option value="full">Full process name</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-wrap">Wrap at</label>
+          <div class="ctl">
+            <input type="range" id="c-wrap" min="8" max="80" step="1">
+            <span class="val" id="v-wrap"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-truncate">Truncate</label>
+          <div class="ctl">
+            <input type="range" id="c-truncate" min="0" max="120" step="1">
+            <span class="val" id="v-truncate"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelcutoff">Only label ≥</label>
+          <div class="ctl">
+            <input type="range" id="c-labelcutoff" min="0" max="10" step="0.1">
+            <span class="val" id="v-labelcutoff"></span>
+          </div>
+        </div>
+        <p class="hint">Silences labels on hairline nodes without removing
+          them from the diagram — the data is untouched.</p>
+        <div class="row">
+          <label for="c-align">Align</label>
+          <div class="ctl">
+            <select id="c-align">
+              <option value="justify">Justify</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+              <option value="center">Centre</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-decimals">Decimals</label>
+          <div class="ctl">
+            <input type="range" id="c-decimals" min="0" max="3" step="1">
+            <span class="val" id="v-decimals"></span>
+          </div>
+        </div>
+        <p class="hint">Click any node on the diagram to rename it, recolour it,
+          or detach its label as a free-floating, draggable annotation.</p>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-addtext">Add free text</button>
+          <button class="btn" type="button" id="c-clearann">Clear annotations</button>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── COLOURS ───────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Colours</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-theme">Theme</label>
+          <div class="ctl">
+            <select id="c-theme">
+              <option value="auto">Follow system</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-palette">Palette</label>
+          <div class="ctl"><select id="c-palette"></select></div>
+        </div>
+        <p class="hint" id="palette-hint"></p>
+
+        <div id="depth-colors"></div>
+
+        <div class="row">
+          <label for="c-linkmode">Link colour</label>
+          <div class="ctl">
+            <select id="c-linkmode">
+              <option value="depth">By depth</option>
+              <option value="source">By source node</option>
+              <option value="target">By target node</option>
+              <option value="uniform">Uniform</option>
+              <option value="magnitude">By magnitude</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" id="row-linkcolor">
+          <label for="c-linkcolor">Link colour</label>
+          <div class="ctl"><input type="color" id="c-linkcolor"></div>
+        </div>
+        <div class="row">
+          <label for="c-linkalpha">Link opacity</label>
+          <div class="ctl">
+            <input type="range" id="c-linkalpha" min="0.05" max="1" step="0.01">
+            <span class="val" id="v-linkalpha"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-negcolor">Negative flows</label>
+          <div class="ctl"><input type="color" id="c-negcolor"></div>
+        </div>
+        <div class="row">
+          <label for="c-bordercolor">Node border</label>
+          <div class="ctl">
+            <input type="color" id="c-bordercolor">
+            <input type="range" id="c-borderwidth" min="0" max="4" step="0.5">
+            <span class="val" id="v-borderwidth"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-bg">Background</label>
+          <div class="ctl">
+            <input type="color" id="c-bg">
+            <button class="btn" type="button" id="c-bg-auto">Auto</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── LAYOUT ────────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Layout</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-placement">Placement</label>
+          <div class="ctl">
+            <select id="c-placement">
+              <option value="weighted">Value-weighted columns</option>
+              <option value="even">Even columns by depth</option>
+              <option value="auto">Auto (let Plotly decide)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-arrangement">Dragging</label>
+          <div class="ctl">
+            <select id="c-arrangement">
+              <option value="snap">Snap</option>
+              <option value="freeform">Freeform</option>
+              <option value="perpendicular">Perpendicular</option>
+              <option value="fixed">Fixed (no dragging)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-pad">Node gap</label>
+          <div class="ctl">
+            <input type="range" id="c-pad" min="2" max="60" step="1">
+            <span class="val" id="v-pad"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-thickness">Node width</label>
+          <div class="ctl">
+            <input type="range" id="c-thickness" min="4" max="60" step="1">
+            <span class="val" id="v-thickness"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-autoheight">Auto height</label>
+          <div class="ctl"><input type="checkbox" id="c-autoheight"></div>
+        </div>
+        <div class="row" id="row-height">
+          <label for="c-height">Height</label>
+          <div class="ctl">
+            <input type="range" id="c-height" min="300" max="6000" step="20">
+            <span class="val" id="v-height"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-fitwidth">Fit width</label>
+          <div class="ctl"><input type="checkbox" id="c-fitwidth"></div>
+        </div>
+        <div class="row" id="row-width">
+          <label for="c-width">Width</label>
+          <div class="ctl">
+            <input type="range" id="c-width" min="400" max="3200" step="20">
+            <span class="val" id="v-width"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-marginx">Side margin</label>
+          <div class="ctl">
+            <input type="range" id="c-marginx" min="0" max="300" step="4">
+            <span class="val" id="v-marginx"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-margintop">Top margin</label>
+          <div class="ctl">
+            <input type="range" id="c-margintop" min="0" max="240" step="4">
+            <span class="val" id="v-margintop"></span>
+          </div>
+        </div>
+        <p class="hint">Drag nodes on the diagram to move them; the positions
+          stick until you reset them.</p>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-resetpos">Reset dragged positions</button>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── SELECTED NODE ─────────────────────────────────────────────── -->
+    <details class="group" id="group-node" open>
+      <summary>Selected node</summary>
+      <div class="group-body">
+        <p class="empty-note" id="inspector-empty">
+          Click a node on the diagram to edit it.
+        </p>
+        <div id="inspector" hidden>
+          <div class="inspector-name" id="i-full"></div>
+          <div class="inspector-stat" id="i-stat"></div>
+          <div class="row stack">
+            <label for="i-label">Label</label>
+            <input type="text" id="i-label">
+          </div>
+          <div class="row">
+            <label for="i-color">Colour</label>
+            <div class="ctl">
+              <input type="color" id="i-color">
+              <button class="btn" type="button" id="i-color-reset">Depth</button>
+            </div>
+          </div>
+          <div class="row">
+            <label for="i-hide">Hide label</label>
+            <div class="ctl"><input type="checkbox" id="i-hide"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" id="i-detach">Detach label</button>
+            <button class="btn" type="button" id="i-reset">Reset node</button>
+          </div>
+          <p class="hint">A detached label becomes an annotation you can drag
+            anywhere and retype in place — and it can carry its own size.</p>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── EXPORT ────────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Export &amp; settings</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-scale">PNG scale</label>
+          <div class="ctl">
+            <input type="range" id="c-scale" min="1" max="5" step="1">
+            <span class="val" id="v-scale"></span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" type="button" id="c-png">Download PNG</button>
+          <button class="btn" type="button" id="c-svg">SVG</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-save">Save style</button>
+          <button class="btn" type="button" id="c-load">Load style</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-csv">Flows as CSV</button>
+          <button class="btn" type="button" id="c-reset">Reset all</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-publication">Publication preset</button>
+        </div>
+        <p class="hint">The preset switches to the print palette on a white
+          ground with black text, and numbers the nodes with a key below the
+          diagram.</p>
+        <p class="hint" id="save-note">Changes are remembered in this browser.</p>
+        <input type="file" id="c-loadfile" accept="application/json" hidden>
+      </div>
+    </details>
+
+    <div class="btn-row" style="padding: 12px 16px 24px;">
+      <button class="btn" type="button" id="c-hidepanel">Hide panel</button>
+    </div>
+  </aside>
+</div>
+
+<!-- filled only when the page is opened with ?dumpFlows=1, so a headless
+     browser can hand the JS pipeline's output to tools/verify_flows.py -->
+<pre id="flow-dump" hidden></pre>
+
+<script type="text/javascript">
+var PAYLOAD = "{{PAYLOAD}}";
+var INITIAL = "{{INITIAL}}";
+var PALETTES = "{{PALETTES}}";
+</script>
+<script type="text/javascript">/*{{FLOWS_JS}}*/</script>
+<script type="text/javascript">/*{{DASHBOARD_JS}}*/</script>
+</body>
+</html>
