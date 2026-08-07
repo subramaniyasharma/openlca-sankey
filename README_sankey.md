@@ -63,7 +63,6 @@ defaults to a cutoff of 0.)
 | `sankey_assets/flows.js` | The flow pipeline — level cut, aggregation, small-flow handling, node cap, prune, balance, cycle breaking |
 | `sankey_assets/dashboard.js` | Figure building, controls, node inspector, annotations, export, persistence |
 | `sankey_assets/template.html`, `dashboard.css` | Page shell and styling |
-| `tools/verify_flows.py` | The original Python pipeline, kept only to regression-check the JS port |
 
 The flow pipeline lives in **one** place (`flows.js`) so there is nothing to
 keep in sync. Python only parses and packages.
@@ -111,6 +110,11 @@ pip install -e ".[sankey]"
 ```
 
 ## Verifying a change to the pipeline
+
+The detailed harness commands below document the original development
+verification run. Those harness files are not included in this compact public
+distribution; use the generated dashboard's own controls and the Python syntax
+check above for a quick local check.
 
 `flows.js` is checked against the original Python implementation, which is
 preserved verbatim in `tools/verify_flows.py`.

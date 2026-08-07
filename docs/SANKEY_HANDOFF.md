@@ -1,7 +1,7 @@
 # Sankey dashboard — engineering handoff
 
-Context for an agent picking up `generate_sankey.py` and `sankey_assets/`.
-Written 2026-08-07, at the end of the session that rebuilt them.
+Engineering notes for contributors working on `generate_sankey.py` and
+`sankey_assets/`. Written 2026-08-07 after the dashboard rebuild.
 
 `README_sankey.md` is the **user**-facing doc. This is the **why**: decisions,
 invariants, and the things that will look like bugs but aren't.
