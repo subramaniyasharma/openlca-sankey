@@ -908,6 +908,7 @@
   function wireBrandHeader() {
     var source = $('brand-source');
     if (source) source.textContent = META.source || '';
+    if (META.title) document.title = META.title + ' - openLCA Sankey';
 
     // the builders leave src empty when the mark is missing from gui_assets
     var logo = $('brand-logo');
@@ -1531,10 +1532,12 @@
     // panel visibility
     $('c-hidepanel').addEventListener('click', function () {
       document.body.classList.add('panel-hidden');
+      $('panel-toggle').setAttribute('aria-expanded', 'false');
       setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
     });
     $('panel-toggle').addEventListener('click', function () {
       document.body.classList.remove('panel-hidden');
+      this.setAttribute('aria-expanded', 'true');
       setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
     });
   }
