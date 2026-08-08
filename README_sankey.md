@@ -28,7 +28,14 @@ colour, title text, alignment and weight.
 
 **Labels** — name / name+% / % / **numbered** / none; short or full process name;
 wrap width; truncation; a label cutoff that silences hairline nodes without
-removing them; alignment; decimal places. Plus free-text annotations.
+removing them; alignment; **orientation**; decimal places. Plus free-text
+annotations.
+
+Orientation turns every node label about the point where it meets its node, in
+15° steps from −90° to +90°, so a narrow column can stand its labels upright
+instead of truncating them. The canvas grows to fit the turned block, and both
+the PNG and the SVG export come out rotated — see [Rotated
+labels](#rotated-labels) for why that needs its own code path.
 
 **Colours** — light/dark/auto; four depth palettes; a colour picker per depth;
 link colour by depth, source, target, magnitude or uniform; link opacity;
@@ -60,6 +67,7 @@ defaults to a cutoff of 0.)
 | Path | Role |
 |---|---|
 | `generate_sankey.py` | Reads the Excel tree at full depth, resolves display labels, writes the HTML |
+| `sankey_gui.py` | Desktop front end; shells out to `generate_sankey.main()` and owns no pipeline logic |
 | `sankey_assets/flows.js` | The flow pipeline — level cut, aggregation, small-flow handling, node cap, prune, balance, cycle breaking |
 | `sankey_assets/dashboard.js` | Figure building, controls, node inspector, annotations, export, persistence |
 | `sankey_assets/template.html`, `dashboard.css` | Page shell and styling |
@@ -82,6 +90,70 @@ market for transport, freight, train, fleet average | ... | Cutoff, U - CN
 Labels are resolved once over the **whole** tree, not per level, so a node keeps
 its name as you move the Levels slider. The old script re-resolved per level, so
 the same process could be labelled differently at 2 levels than at 4.
+
+### Rotated labels
+
+Plotly's Sankey has no label angle of its own, and there is no figure attribute
+to set. What it does give us is one `<text x="0" y="0">` per label carrying a
+`translate()` to the point where the label meets its node — so appending a
+`rotate()` to that transform turns the label about exactly the right pivot, and
+wrapped lines (tspans inside the same element) turn with it. `applyLabelAngle()`
+re-applies it after every draw, because Plotly rewrites the transform on each
+one, node drags included.
+
+The catch is export. `Plotly.toImage` does **not** photograph the live DOM: it
+rebuilds the figure from its spec into a throwaway div, which is a faithful copy
+of everything Plotly knows about and nothing it does not. A rotation that only
+exists in the SVG is therefore silently dropped from every PNG and SVG — the
+worst kind of bug for a publication figure. So when the labels are turned,
+`exportImage()` asks Plotly for the SVG *string*, runs the same rotation over it
+with `rotateLabelsInSvg()`, and then either saves that string or rasterises it
+through an `<img>` and a canvas the way Plotly's own PNG path does. At 0° the
+whole detour is skipped and Plotly's `downloadImage` is used unchanged.
+
+For the same reason the modebar camera is removed while the labels are turned:
+it calls Plotly's own `toImage` and cannot know about the rotation, so leaving
+it there would hand out a quietly un-rotated PNG. The panel's Export buttons are
+the rotation-aware path.
+
+`labelExtent()` sizes the canvas from the rotated bounding box
+(`h·cos θ + w·sin θ`) rather than the line count, so upright labels get the room
+they need. At 0° that expression collapses to the old line-stack height, and a
+horizontal diagram is laid out exactly as it was before the control existed.
+
+## Desktop app
+
+`sankey_gui.py` is a Tkinter front end for people who would rather not open a
+terminal. It queues up any number of workbooks — **Add files…**, or **Scan
+folder…** to sweep a tree for `.xlsx` — and writes `<name>-dashboard.html` per
+workbook into a folder you choose.
+
+```bash
+python sankey_gui.py
+```
+
+On Windows, `Sankey dashboard.bat` launches it with `pythonw` so no console
+window trails behind it.
+
+The fields map one-to-one onto the command line above, and every one of them
+only sets where the dashboard *opens*: levels, threshold, colours and labels all
+stay adjustable inside the page. Runs happen on a worker thread with
+`generate_sankey`'s own output piped into the log pane, so a batch of large
+workbooks does not freeze the window, and a workbook that fails to parse is
+reported without taking the rest of the queue down with it.
+
+Nothing about the pipeline lives here — the GUI builds an argument list and
+calls `generate_sankey.main()`, so the script stays the reference
+implementation and keeps working on its own.
+
+Its look is set entirely by the `THEME` dict at the top of the file: a design
+pass only has to touch that block and drop replacement art into `gui_assets/`.
+The colours follow Grenfell Campus's own pages — white ground, `#393939` body
+text, campus blue `#1e22aa` on the accents — and the type falls back through
+faces actually installed on Windows, since Memorial's Avenir is licensed and
+cannot be redistributed here. If you have the official Grenfell Campus logo,
+drop it in as `gui_assets/grenfell-logo.png` and the header will pick it up; it
+is deliberately not vendored.
 
 ## Command line
 

@@ -230,6 +230,17 @@
           </div>
         </div>
         <div class="row">
+          <label for="c-labelangle">Orientation</label>
+          <div class="ctl">
+            <input type="range" id="c-labelangle" min="-90" max="90" step="15">
+            <span class="val" id="v-labelangle"></span>
+          </div>
+        </div>
+        <p class="hint">Turns every node label about the point where it meets
+          its node. ±90° stands them upright, which is what a narrow column
+          wants; the canvas grows to make room. Also applied to the exported
+          PNG and SVG.</p>
+        <div class="row">
           <label for="c-decimals">Decimals</label>
           <div class="ctl">
             <input type="range" id="c-decimals" min="0" max="3" step="1">

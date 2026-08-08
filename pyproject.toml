@@ -41,4 +41,7 @@ Repository = "https://github.com/subramaniyasharma/openlca-sankey"
 Issues = "https://github.com/subramaniyasharma/openlca-sankey/issues"
 
 [tool.setuptools]
-py-modules = ["generate_sankey"]
+# No console/gui entry point on purpose: like generate_sankey.py, the GUI reads
+# its assets from beside its own file, so it is run from a checkout rather than
+# from site-packages.
+py-modules = ["generate_sankey", "sankey_gui"]

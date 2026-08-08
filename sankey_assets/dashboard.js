@@ -39,6 +39,7 @@
       truncate: 0,               // 0 = no truncation
       labelCutoff: 0,            // % below which a node goes unlabelled
       align: 'justify',
+      labelAngle: 0,             // degrees, clockwise; 0 = horizontal
       decimals: 1,
       // colours
       theme: 'auto',
@@ -303,6 +304,26 @@
     });
   }
 
+  /* Vertical room a label block occupies once it is turned by labelAngle.
+     Un-rotated this is just the line stack, so a horizontal diagram sizes
+     exactly as it did before the orientation control existed; turned towards
+     the vertical the block's *width* is what starts eating the column, which
+     is why a rotated diagram needs a taller canvas rather than the same one. */
+  function labelExtent(label) {
+    var lines = label.split('<br>');
+    var longest = 0;
+    for (var i = 0; i < lines.length; i++) {
+      longest = Math.max(longest, lines[i].length);
+    }
+    var blockH = lines.length * state.labelSize * 1.3;
+    if (!state.labelAngle) return blockH;
+    // ~0.55 em per character is the usual average for a proportional face; the
+    // figure only has to be close enough to keep neighbours from touching.
+    var blockW = longest * state.labelSize * 0.55;
+    var rad = Math.abs(state.labelAngle) * Math.PI / 180;
+    return blockH * Math.cos(rad) + blockW * Math.sin(rad);
+  }
+
   /* Size to the tallest column's actual label stack, not just its node count:
      a two-line wrapped label needs twice the room of a one-line one, and
      guessing on node count alone is what produced the old 6840px files that
@@ -312,8 +333,7 @@
     nodes.forEach(function (name, i) {
       var d = v.depthOf[name];
       var need = labels[i]
-        ? Math.max(labels[i].split('<br>').length * state.labelSize * 1.3,
-                   state.thickness) + state.pad
+        ? Math.max(labelExtent(labels[i]), state.thickness) + state.pad
         // an unlabelled node only needs to be visible, not readable
         : Math.min(state.pad, 6) + 2;
       perColumn[d] = (perColumn[d] || 0) + need;
@@ -410,6 +430,10 @@
           text: a.text, x: a.x, y: a.y,
           xref: 'paper', yref: 'paper',
           showarrow: false,
+          // annotations carry their own angle — a label detached while the
+          // diagram was turned keeps the orientation it was detached at, and
+          // later moves of the Orientation slider leave it where it was put
+          textangle: a.angle || 0,
           font: { family: state.font, size: a.size || state.labelSize,
                   color: a.color || ink },
           align: 'left',
@@ -433,8 +457,14 @@
       },
       displaylogo: false,
       scrollZoom: false,
+      // The modebar camera calls Plotly's own toImage, which rebuilds the
+      // figure from its spec and so cannot know about a label rotation that
+      // lives in the SVG.  Rather than let it hand out a silently un-rotated
+      // PNG, take it away while the labels are turned: the panel's Export
+      // buttons go through the rotation-aware path below.
       modeBarButtonsToRemove: ['lasso2d', 'select2d', 'zoom2d', 'pan2d',
-                               'zoomIn2d', 'zoomOut2d', 'autoScale2d'],
+                               'zoomIn2d', 'zoomOut2d', 'autoScale2d']
+                              .concat(state.labelAngle ? ['toImage'] : []),
       toImageButtonOptions: {
         format: 'png',
         filename: (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey',
@@ -445,8 +475,51 @@
     return { data: [trace], layout: layout, config: config, nodes: nodes };
   }
 
+  /* ── label orientation ────────────────────────────────────────────────── */
+  /* Plotly's Sankey has no label angle of its own.  It draws each label as a
+     <text x="0" y="0"> carrying a translate() to the point where the label
+     meets its node, so appending a rotate() to that transform turns the label
+     about exactly the right pivot: however far it swings it stays pinned to
+     its node.  Multi-line labels come through as tspans inside that same
+     <text>, so the whole stack turns together.
+
+     Plotly rewrites the transform on every draw — including node drags — so
+     this has to run again after each one. */
+  function angleTransform(base, angle) {
+    var clean = String(base || '').replace(/\s*rotate\([^)]*\)/g, '');
+    return angle ? (clean + ' rotate(' + angle + ')') : clean;
+  }
+
+  function applyLabelAngle() {
+    var angle = state.labelAngle || 0;
+    var texts = gd.querySelectorAll('text.node-label');
+    for (var i = 0; i < texts.length; i++) {
+      texts[i].setAttribute(
+        'transform', angleTransform(texts[i].getAttribute('transform'), angle));
+    }
+  }
+
+  /* Same rotation, applied to an exported SVG string.  Export cannot reuse the
+     live DOM: Plotly.toImage redraws the figure from its spec into a throwaway
+     div, which is a faithful copy of everything Plotly knows about and nothing
+     it doesn't.  Both export paths therefore patch the string instead. */
+  function rotateLabelsInSvg(svgText) {
+    var angle = state.labelAngle || 0;
+    if (!angle) return svgText;
+    return svgText.replace(/<text\b[^>]*>/g, function (tag) {
+      if (tag.indexOf('node-label') < 0) return tag;
+      if (/\stransform="/.test(tag)) {
+        return tag.replace(/\stransform="([^"]*)"/, function (all, tf) {
+          return ' transform="' + angleTransform(tf, angle) + '"';
+        });
+      }
+      return tag.replace(/<text\b/, '<text transform="rotate(' + angle + ')"');
+    });
+  }
+
   /* ── render ───────────────────────────────────────────────────────────── */
   var lastFigure = null;
+  var afterPlotBound = false;
 
   function render() {
     view = LCAFlows.buildFlows(PAYLOAD, {
@@ -471,6 +544,12 @@
 
     lastFigure = buildFigure(view);
     Plotly.react(gd, lastFigure.data, lastFigure.layout, lastFigure.config);
+    applyLabelAngle();
+    if (!afterPlotBound && gd.on) {
+      // catches the draws we do not drive ourselves — node drags, resizes
+      afterPlotBound = true;
+      gd.on('plotly_afterplot', applyLabelAngle);
+    }
     updateStats();
     refreshInspector();
     buildKey();
@@ -767,11 +846,12 @@
     return { x: 0.5, y: 0.5 };
   }
 
-  function addAnnotation(text, pos, size) {
+  function addAnnotation(text, pos, size, angle) {
     state.annotations.push({
       text: text,
       x: pos.x, y: pos.y,
       size: size || state.labelSize + 1,
+      angle: angle || 0,
       color: state.labelColor || themeInk()
     });
     render();
@@ -833,14 +913,78 @@
     return (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey';
   }
 
+  /* Rasterise an SVG string the way Plotly's own PNG path does — through an
+     <img> and a canvas.  The source is a data: URI rather than a blob: one so
+     the canvas stays untainted on file:// as well as over http. */
+  function rasterize(svgText, width, height, scale, done, fail) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.drawImage(img, 0, 0, width, height);
+        if (canvas.toBlob) canvas.toBlob(done, 'image/png');
+        else done(canvas.toDataURL('image/png'));
+      } catch (err) { fail(); }
+    };
+    img.onerror = fail;
+    img.src = 'data:image/svg+xml,' + encodeURIComponent(svgText);
+  }
+
   function exportImage(format) {
-    Plotly.downloadImage(gd, {
-      format: format,
-      filename: baseName(),
-      scale: format === 'svg' ? 1 : state.scale,
-      width: gd._fullLayout.width,
-      height: gd._fullLayout.height
-    });
+    var width = gd._fullLayout.width;
+    var height = gd._fullLayout.height;
+    var scale = format === 'svg' ? 1 : state.scale;
+
+    function plotlyDownload() {
+      Plotly.downloadImage(gd, {
+        format: format, filename: baseName(),
+        scale: scale, width: width, height: height
+      });
+    }
+
+    // Nothing to patch when the labels are level — keep Plotly's own path.
+    if (!state.labelAngle) return plotlyDownload();
+
+    function giveUp() {
+      $('save-note').textContent =
+        'Could not export the rotated labels — saved the level version instead.';
+      plotlyDownload();
+    }
+
+    Plotly.toImage(gd, { format: 'svg', width: width, height: height })
+      .then(function (uri) {
+        var svg = rotateLabelsInSvg(
+          decodeURIComponent(uri.replace(/^data:image\/svg\+xml,/, '')));
+        if (format === 'svg') {
+          download(baseName() + '.svg', svg, 'image/svg+xml');
+          return;
+        }
+        rasterize(svg, width, height, scale, function (out) {
+          if (out && out.type) {                       // a Blob from toBlob
+            var url = URL.createObjectURL(out);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = baseName() + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          } else if (out) {                            // a data URI fallback
+            var link = document.createElement('a');
+            link.href = out;
+            link.download = baseName() + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } else {
+            giveUp();
+          }
+        }, giveUp);
+      }, giveUp);
   }
 
   function exportCsv() {
@@ -948,6 +1092,9 @@
       return v ? v.toFixed(1) + '%' : 'all';
     });
     bindSelect('c-align', 'align');
+    bindRange('c-labelangle', 'labelAngle', function (v) {
+      return (v > 0 ? '+' : '') + v + '°';
+    });
     bindRange('c-decimals', 'decimals', function (v) { return String(v); });
     $('c-addtext').addEventListener('click', function () {
       // No prompt(): modal dialogs are blocked in sandboxed contexts, and the
@@ -1025,7 +1172,7 @@
       var text = labelFor(selected, view) || selected;
       var pos = nodePaperPos(selected);
       editSelected({ hidden: true });
-      addAnnotation(text, pos);
+      addAnnotation(text, pos, null, state.labelAngle);
     });
     $('i-reset').addEventListener('click', function () {
       if (!selected) return;
@@ -1123,7 +1270,7 @@
       ['c-fontsize', 'fontSize'], ['c-labelsize', 'labelSize'],
       ['c-hoversize', 'hoverSize'], ['c-titlesize', 'titleSize'],
       ['c-wrap', 'wrap'], ['c-truncate', 'truncate'], ['c-decimals', 'decimals'],
-      ['c-labelcutoff', 'labelCutoff'],
+      ['c-labelcutoff', 'labelCutoff'], ['c-labelangle', 'labelAngle'],
       ['c-linkalpha', 'linkAlpha'], ['c-borderwidth', 'borderWidth'],
       ['c-pad', 'pad'], ['c-thickness', 'thickness'], ['c-height', 'height'],
       ['c-width', 'width'], ['c-marginx', 'marginX'],

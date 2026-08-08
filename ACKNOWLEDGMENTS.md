@@ -3,6 +3,25 @@
 This project builds on the openLCA ecosystem and on widely used open-source
 libraries. The following projects and tools deserve credit.
 
+## Laboratory
+
+Developed for the **Laboratory for Eco-design, Green Chemistry And Circular
+Innovation (LEGACI)** — <https://sites.google.com/mun.ca/legaci> — in the School
+of Science and the Environment, Grenfell Campus, Memorial University of
+Newfoundland, Corner Brook, NL.
+
+The LEGACI logo in `gui_assets/` is the laboratory's own mark, taken from the
+site above and used here with the laboratory's work; it is not covered by this
+repository's license.
+
+The desktop app's colours and typography follow the published Grenfell Campus
+and Memorial University visual identity, but no Memorial trademark or logo file
+is vendored here. Memorial's corporate typeface (Avenir) is licensed and is not
+redistributed; the app falls back to faces installed with Windows. The official
+Grenfell Campus logo is available from [Memorial's Marketing &
+Communications](https://www.mun.ca/marcomm/memorials-brand/logos/grenfell-campus-logos/)
+and can be dropped in as `gui_assets/grenfell-logo.png`.
+
 ## Ecosystem and reference work
 
 - [openLCA](https://www.openlca.org/) and [GreenDelta's olca-app](https://github.com/GreenDelta/olca-app): the contribution-tree export and Sankey concepts this project works with.
@@ -15,7 +34,8 @@ repository's license.
 
 ## Software dependencies
 
-- [Python](https://www.python.org/)
+- [Python](https://www.python.org/) and its bundled Tk/Tkinter, which is the
+  whole of the desktop app's runtime.
 - [pandas](https://pandas.pydata.org/): tabular data handling.
 - [openpyxl](https://openpyxl.readthedocs.io/): reading Excel workbooks.
 - [Plotly](https://plotly.com/javascript/): rendering the generated Sankey

@@ -13,6 +13,7 @@ research result without running a server.
 - Show, pool, or hide small flows relative to their parent.
 - Inspect unbalanced trees or add a direct-emissions/unresolved remainder.
 - Edit labels, colours, fonts, node positions, and annotations.
+- Turn node labels to any angle between −90° and +90°, exports included.
 - Export PNG, SVG, CSV, and reusable style settings.
 - Use a numbered publication view with a process key.
 
@@ -33,6 +34,21 @@ python generate_sankey.py contribution_tree.xlsx -o dashboard.html
 Open `dashboard.html` in a browser. No Python runtime or web server is needed
 to use the generated dashboard.
 
+## Desktop app (Windows)
+
+`sankey_gui.py` is a small desktop front end over the same script: pick the
+workbooks, set the starting values, and it writes one dashboard per file.
+Double-click **`Sankey dashboard.bat`**, or run it directly:
+
+```bash
+python sankey_gui.py
+```
+
+It uses only the standard library — Tkinter ships with the python.org Windows
+installer — and calls `generate_sankey.main()` rather than reimplementing
+anything, so the command line remains the reference path. See
+[README_sankey.md](README_sankey.md#desktop-app) for what each field does.
+
 The command-line interface also supports `--max-depth`, `--levels`,
 `--threshold`, `--max-nodes`, `--pool`, `--balance`, `--title`, `--payload-min`,
 `--cdn`, and `--no-open`. See [README_sankey.md](README_sankey.md) for the
@@ -50,6 +66,9 @@ of the process columns to reconstruct the tree.
 | Path | Purpose |
 | --- | --- |
 | `generate_sankey.py` | Reads the Excel export and packages the dashboard. |
+| `sankey_gui.py` | Windows desktop front end over `generate_sankey.py`. |
+| `Sankey dashboard.bat` | Double-click launcher for the desktop app. |
+| `gui_assets/` | Logo art used by the desktop app. |
 | `sankey_assets/flows.js` | The single browser-side flow pipeline. |
 | `sankey_assets/dashboard.js` | Controls, rendering, editing, persistence, and export. |
 | `sankey_assets/template.html` | Dashboard page structure. |
