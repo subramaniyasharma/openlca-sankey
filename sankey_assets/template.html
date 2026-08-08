@@ -11,6 +11,23 @@
 
 <button id="panel-toggle" class="btn" type="button">Controls</button>
 
+<!-- LEGACI brand header — from the Claude Design mockup. The logo is inlined
+     as a data URI so a generated file still needs nothing from the network. -->
+<header id="brand-header">
+  <img id="brand-logo" src="{{LOGO}}" alt="LEGACI">
+  <div id="brand-titles">
+    <div id="brand-name">LCA-Sankey Tool</div>
+    <div id="brand-lab">Laboratory for Eco-design, Green Chemistry and Circular Innovation</div>
+  </div>
+  <div id="brand-spacer"></div>
+  <span id="brand-tag">Open source</span>
+  <div id="brand-theme">
+    <button type="button" id="brand-light" aria-pressed="false">Light</button>
+    <button type="button" id="brand-dark" aria-pressed="false">Dark</button>
+  </div>
+  <span id="brand-source"></span>
+</header>
+
 <!-- The drop-in build turns these on; a per-workbook build leaves them hidden
      and the markup costs it nothing. -->
 <div id="drop" hidden>

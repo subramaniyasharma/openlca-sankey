@@ -9,6 +9,7 @@ research result without running a server.
 
 ## Features
 
+- Branded for LEGACI: header band, lab accent colour and brand depth palette.
 - Explore contribution-tree depth with live level controls.
 - Show, pool, or hide small flows relative to their parent.
 - Inspect unbalanced trees or add a direct-emissions/unresolved remainder.

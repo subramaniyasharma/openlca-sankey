@@ -33,6 +33,9 @@
   function showDrop(show) {
     $('drop').hidden = !show;
     $('source-bar').hidden = show;
+    // the empty stage and panel would otherwise sit under the drop screen
+    var app = document.querySelector('.app');
+    if (app) app.hidden = show;
   }
 
   function fail(message) {

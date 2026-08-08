@@ -35,6 +35,7 @@ Label rule
 """
 
 import argparse
+import base64
 from html import escape
 import json
 import os
@@ -75,7 +76,22 @@ ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 #   legacy       FAILS three checks (lightness band, chroma floor and the
 #                normal-vision floor: #17A589 vs #2E86C1 is dE 14.4).  Kept
 #                only so existing figures can be reproduced; the UI says so.
+#   legaci       The lab's own colours, from the Claude Design mockup.  Checked
+#                with the same method as the rest and it is the weakest of the
+#                three usable ones: worst adjacent dE 16.1 light / 15.5 dark in
+#                normal vision, falling to 9.4 (light, deuteranopia, depths 3/4)
+#                and 9.7 (dark, protanopia, depths 0/1) — against 17.2 and 14.7
+#                for `categorical`.  Shipped as the default anyway because it is
+#                the branded look and the cost lands on screen only: the
+#                publication preset switches to `print`, so figures for a paper
+#                are unaffected.  Switch the Colours → Palette dropdown to
+#                Categorical for the most CVD-robust on-screen reading.
 PALETTES = {
+    'legaci': {
+        'label': 'LEGACI brand',
+        'light': ['#2f7d4f', '#b8912f', '#2c7a85', '#6a9a3a', '#8a6d3b', '#5f5a4e'],
+        'dark': ['#4e9e6a', '#c8a24a', '#3e8e9c', '#7fb25a', '#9a7b4f', '#6f6a5e'],
+    },
     'categorical': {
         'label': 'Categorical (validated)',
         'light': ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'],
@@ -334,6 +350,18 @@ def _read_asset(name):
         return fh.read()
 
 
+def _logo_data_uri():
+    """The LEGACI mark, inlined so a generated page needs nothing from the net."""
+    path = os.path.join(os.path.dirname(ASSET_DIR), 'gui_assets',
+                        'legaci-mark-76.png')
+    try:
+        with open(path, 'rb') as fh:
+            return ('data:image/png;base64,' +
+                    base64.b64encode(fh.read()).decode('ascii'))
+    except OSError:
+        return ''          # dashboard.js hides the <img> when this is empty
+
+
 def _plotly_tag(use_cdn):
     cdn_tag = ('<script src="https://cdn.plot.ly/plotly-3.0.1.min.js" '
                'charset="utf-8"></script>')
@@ -372,6 +400,7 @@ def render_dashboard(payload, out_html, initial, use_cdn=False):
             .replace('/*{{PARSE_JS}}*/', '')
             .replace('/*{{APP_JS}}*/', '')
             .replace('<!--{{PLOTLY}}-->', _plotly_tag(use_cdn))
+            .replace('{{LOGO}}', _logo_data_uri())
             .replace('"{{PAYLOAD}}"', payload_json)
             .replace('"{{INITIAL}}"', _json_for_script(initial))
             .replace('"{{PALETTES}}"', _json_for_script(PALETTES))

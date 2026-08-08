@@ -36,6 +36,7 @@ def build(out_html, use_cdn=False):
             .replace('/*{{PARSE_JS}}*/', gs._read_asset('parse.js'))
             .replace('/*{{APP_JS}}*/', gs._read_asset('app.js'))
             .replace('<!--{{PLOTLY}}-->', gs._plotly_tag(use_cdn))
+            .replace('{{LOGO}}', gs._logo_data_uri())
             # no data yet — the dashboard waits for app.js to hand it some
             .replace('"{{PAYLOAD}}"', 'null')
             .replace('"{{INITIAL}}"', 'null')
@@ -45,7 +46,7 @@ def build(out_html, use_cdn=False):
     left = [tag for tag in ('{{CSS}}', '{{FLOWS_JS}}', '{{DASHBOARD_JS}}',
                             '{{XLSX_JS}}', '{{PARSE_JS}}', '{{APP_JS}}',
                             '{{PAYLOAD}}', '{{INITIAL}}', '{{PALETTES}}',
-                            '{{TITLE}}', '{{PLOTLY}}')
+                            '{{TITLE}}', '{{PLOTLY}}', '{{LOGO}}')
             if tag in html]
     if left:
         raise SystemExit('template placeholders left unfilled: ' + ', '.join(left))

@@ -234,6 +234,44 @@ cannot be redistributed here. If you have the official Grenfell Campus logo,
 drop it in as `gui_assets/grenfell-logo.png` and the header will pick it up; it
 is deliberately not vendored.
 
+## The LEGACI look
+
+Both builds open branded, from the lab's Claude Design mockup:
+
+* a header band — LEGACI mark, **LCA-Sankey Tool**, the lab's full name, an
+  "Open source" tag, a Light/Dark pair and the source filename — over a 3px
+  brand rule;
+* the chrome accent (sliders, active segments, focus) in the lab's green,
+  `#2f7d4f` light / `#4e9e6a` dark;
+* a **LEGACI brand** depth palette, selected by default.
+
+The header's Light/Dark buttons are a second face on the panel's Theme select
+rather than a setting of their own, so the two cannot disagree. The mark is
+inlined as a data URI and the webfonts are *not* fetched — the design system
+ships Carlito and Arimo as metric-compatible stand-ins for Calibri and Arial,
+and they are named first in the stack, but a generated dashboard is meant to
+work with no network at all, and the machines this runs on have the real fonts.
+
+### One caveat on the brand palette
+
+The other depth palettes carry a note in `generate_sankey.py` recording what
+the data-viz validator said about them. The LEGACI palette was put through the
+same question and is the weakest of the usable three:
+
+| Palette | normal | protanopia | deuteranopia |
+|---|---|---|---|
+| LEGACI light | 16.1 | 14.6 | **9.4** |
+| LEGACI dark | 15.5 | **9.7** | 10.9 |
+| categorical light | 43.2 | 14.8 | 17.2 |
+| categorical dark | 41.4 | 14.7 | 18.4 |
+
+(worst adjacent-depth CIEDE2000 separation, Brettel-style simulation)
+
+It ships as the default anyway, because it is the branded look and the cost
+lands on screen only: the publication preset switches to `print`, so a figure
+for a paper is unaffected either way. For the most robust on-screen reading,
+Colours → Palette → **Categorical**.
+
 ## The browser build
 
 ```bash

@@ -55,7 +55,7 @@
       decimals: 1,
       // colours
       theme: 'auto',
-      palette: 'categorical',
+      palette: 'legaci',
       depthColors: null,         // null = take from the palette preset
       linkMode: 'depth',
       linkColor: '#2a78d6',
@@ -881,6 +881,54 @@
     } catch (err) { /* corrupt or unavailable — fall back to defaults */ }
   }
 
+  /* ── brand header ─────────────────────────────────────────────────────── */
+  /* The header's Light/Dark pair is a second face on the panel's Theme select
+     rather than its own setting, so the two can never disagree. */
+  function paintBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    var mode = activeTheme();
+    light.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+    dark.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+  }
+
+  function afterThemeChange() {
+    document.documentElement.setAttribute(
+      'data-theme', state.theme === 'auto' ? '' : state.theme);
+    state.depthColors = null;
+    state.labelColor = null;
+    state.background = null;
+    state.borderColor = null;
+    $('c-labelcolor').value = themeInk();
+    $('c-bg').value = themeSurface();
+    buildDepthColors();
+    paintBrandTheme();
+  }
+
+  function wireBrandHeader() {
+    var source = $('brand-source');
+    if (source) source.textContent = META.source || '';
+
+    // the builders leave src empty when the mark is missing from gui_assets
+    var logo = $('brand-logo');
+    if (logo && !logo.getAttribute('src')) logo.hidden = true;
+
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    function pick(mode) {
+      return function () {
+        state.theme = mode;
+        var sel = $('c-theme');
+        if (sel) sel.value = mode;
+        afterThemeChange();
+        render();
+      };
+    }
+    light.addEventListener('click', pick('light'));
+    dark.addEventListener('click', pick('dark'));
+    paintBrandTheme();
+  }
+
   /* ── control binding ──────────────────────────────────────────────────── */
   function setValueLabel(id, text) {
     var el = $(id);
@@ -1347,17 +1395,7 @@
     });
 
     // colours
-    bindSelect('c-theme', 'theme', function () {
-      document.documentElement.setAttribute(
-        'data-theme', state.theme === 'auto' ? '' : state.theme);
-      state.depthColors = null;
-      state.labelColor = null;
-      state.background = null;
-      state.borderColor = null;
-      $('c-labelcolor').value = themeInk();
-      $('c-bg').value = themeSurface();
-      buildDepthColors();
-    });
+    bindSelect('c-theme', 'theme', afterThemeChange);
     bindSelect('c-palette', 'palette', function () {
       state.depthColors = null;
       buildDepthColors();
@@ -1488,6 +1526,8 @@
       render();
     });
 
+    wireBrandHeader();
+
     // panel visibility
     $('c-hidepanel').addEventListener('click', function () {
       document.body.classList.add('panel-hidden');
@@ -1544,6 +1584,7 @@
     Object.keys(repaintSeg).forEach(function (k) { repaintSeg[k](); });
     syncConditionalRows();
     buildDepthColors();
+    paintBrandTheme();
     suspendSync = false;
   }
 
