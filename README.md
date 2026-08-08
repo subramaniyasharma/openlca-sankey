@@ -35,6 +35,28 @@ python generate_sankey.py contribution_tree.xlsx -o dashboard.html
 Open `dashboard.html` in a browser. No Python runtime or web server is needed
 to use the generated dashboard.
 
+## Browser app (drop in a workbook)
+
+Build a single HTML file that reads *any* contribution tree, in the browser:
+
+```bash
+python build_app.py
+```
+
+Open `sankey_app.html` and drop an `.xlsx` on it. The workbook is read, parsed
+and drawn entirely in the page — nothing is uploaded, and whoever you send the
+file to needs no Python, no install and no network. It also works from a static
+host such as GitHub Pages.
+
+Two things that are build-time flags in the script become live controls here,
+because the workbook is still in memory: the payload depth cap, and the
+percentage below which links are dropped. A workbook with several sheets gets a
+sheet picker.
+
+The parser is a port of `generate_sankey.py`, and `tools/verify_parse.py` exists
+to keep the two honest — see
+[README_sankey.md](README_sankey.md#the-browser-build).
+
 ## Desktop app (Windows)
 
 `sankey_gui.py` is a small desktop front end over the same script: pick the
@@ -67,9 +89,14 @@ of the process columns to reconstruct the tree.
 | Path | Purpose |
 | --- | --- |
 | `generate_sankey.py` | Reads the Excel export and packages the dashboard. |
+| `build_app.py` | Packages the drop-in browser build. |
 | `sankey_gui.py` | Windows desktop front end over `generate_sankey.py`. |
 | `Sankey dashboard.bat` | Double-click launcher for the desktop app. |
 | `gui_assets/` | Logo art used by the desktop app. |
+| `sankey_assets/xlsx.js` | Minimal read-only `.xlsx` reader, no dependencies. |
+| `sankey_assets/parse.js` | The contribution-tree parser, ported from Python. |
+| `sankey_assets/app.js` | Drop-in build: file handling and sheet picking. |
+| `tools/verify_parse.py` | Diffs the JS parser against the Python one. |
 | `sankey_assets/flows.js` | The single browser-side flow pipeline. |
 | `sankey_assets/dashboard.js` | Controls, rendering, editing, persistence, and export. |
 | `sankey_assets/template.html` | Dashboard page structure. |

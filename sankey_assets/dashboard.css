@@ -313,3 +313,47 @@ body:not(.panel-hidden) #panel-toggle { display: none; }
   .panel, .stage-bar, #panel-toggle { display: none !important; }
   body, .stage { background: #fff; }
 }
+
+/* ── drop-in build ──────────────────────────────────────────────────────── */
+/* Only the per-file chrome: the drop target, and the bar carrying the things
+   that used to be command-line flags.  Deliberately plain. */
+#drop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  text-align: center;
+}
+#drop[hidden] { display: none; }
+#drop-inner { max-width: 30rem; padding: 2rem; }
+#drop-inner h1 { margin: 0 0 .75rem; font-size: 1.5rem; }
+#drop-inner p { margin: .5rem 0; color: var(--ink-soft); }
+#drop-error {
+  margin-top: 1rem;
+  padding: .6rem .8rem;
+  border: 1px solid var(--negative, #d03b3b);
+  border-radius: 6px;
+  color: var(--negative, #d03b3b);
+  text-align: left;
+  white-space: pre-wrap;
+}
+#drop-error[hidden] { display: none; }
+body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-offset: 1rem; }
+
+#source-bar { gap: .5rem; flex-wrap: wrap; }
+#source-bar[hidden] { display: none; }
+#source-bar label { color: var(--ink-soft); }
+#source-bar select,
+#source-bar input[type="number"] {
+  background: var(--field, transparent);
+  color: inherit;
+  border: 1px solid var(--rule, rgba(128,128,128,.4));
+  border-radius: 4px;
+  padding: 1px 4px;
+  font: inherit;
+}
+#source-bar input[type="number"] { width: 4.5rem; }
+#src-name { font-weight: 600; }

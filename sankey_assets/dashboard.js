@@ -8,9 +8,18 @@
  * previous set's nodes in the DOM.  Written in ES5 so the generated file works
  * in older browsers and can be exercised by a plain script host.
  */
-(function () {
+(function (global) {
   'use strict';
 
+  /* Each start() supersedes the one before it.  A dropped file rebuilds the
+     control panel from scratch, which drops that panel's listeners with the
+     nodes they were on, but a previous instance can still be holding a theme
+     listener or a pending retry — so every closure checks that it is still the
+     current generation before it draws anything. */
+  var generation = 0;
+
+  function start(PAYLOAD, INITIAL, PALETTES) {
+  var myGeneration = ++generation;
   var gd = document.getElementById('chart');
   var META = PAYLOAD.meta || {};
   var STORE_KEY = 'lca-sankey:' + (META.source || 'default');
@@ -753,6 +762,7 @@
   }
 
   function render() {
+    if (myGeneration !== generation) return;
     view = LCAFlows.buildFlows(PAYLOAD, {
       levels: state.levels,
       smallMode: state.smallMode,
@@ -1551,6 +1561,8 @@
     else if (mq.addListener) mq.addListener(onScheme);
   }
 
+  if (typeof global.__lcaOnStarted === 'function') global.__lcaOnStarted();
+
   if (/[?&]dumpFlows=1/.test(location.search)) {
     var qs = function (name, fallback) {
       var m = new RegExp('[?&]' + name + '=([^&]+)').exec(location.search);
@@ -1568,4 +1580,13 @@
     // also into the DOM, so `chrome --headless --dump-dom` can read it back
     $('flow-dump').textContent = dump;
   }
-}());
+  }
+
+  global.LCADashboard = { start: start };
+
+  /* A per-workbook build inlines its data as globals and starts straight away;
+     the drop-in app leaves PAYLOAD null and calls start() itself. */
+  if (typeof PAYLOAD !== 'undefined' && PAYLOAD && PAYLOAD.names) {
+    start(PAYLOAD, INITIAL, PALETTES);
+  }
+}(this));

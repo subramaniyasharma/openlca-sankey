@@ -366,6 +366,11 @@ def render_dashboard(payload, out_html, initial, use_cdn=False):
             .replace('/*{{CSS}}*/', _read_asset('dashboard.css'))
             .replace('/*{{FLOWS_JS}}*/', _read_asset('flows.js'))
             .replace('/*{{DASHBOARD_JS}}*/', _read_asset('dashboard.js'))
+            # the reader, the parser and the drop-in controller belong to
+            # build_app.py; this build already has its data
+            .replace('/*{{XLSX_JS}}*/', '')
+            .replace('/*{{PARSE_JS}}*/', '')
+            .replace('/*{{APP_JS}}*/', '')
             .replace('<!--{{PLOTLY}}-->', _plotly_tag(use_cdn))
             .replace('"{{PAYLOAD}}"', payload_json)
             .replace('"{{INITIAL}}"', _json_for_script(initial))

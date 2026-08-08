@@ -11,8 +11,34 @@
 
 <button id="panel-toggle" class="btn" type="button">Controls</button>
 
+<!-- The drop-in build turns these on; a per-workbook build leaves them hidden
+     and the markup costs it nothing. -->
+<div id="drop" hidden>
+  <div id="drop-inner">
+    <h1>openLCA Sankey</h1>
+    <p>Drop a contribution-tree <b>.xlsx</b> here</p>
+    <p><button class="btn" type="button" id="drop-pick">Choose a file…</button></p>
+    <input type="file" id="drop-file" accept=".xlsx" hidden>
+    <p id="drop-note">Everything is read and drawn in this browser. The file is
+      never uploaded.</p>
+    <p id="drop-error" hidden></p>
+  </div>
+</div>
+
 <div class="app">
   <div class="stage">
+    <div class="stage-bar" id="source-bar" hidden>
+      <span id="src-name"></span>
+      <span class="sep">|</span>
+      <label for="src-sheet">Sheet</label>
+      <select id="src-sheet"></select>
+      <label for="src-maxdepth">Depth</label>
+      <input type="number" id="src-maxdepth" min="1" max="10" step="1" value="6">
+      <label for="src-payloadmin">Drop below %</label>
+      <input type="number" id="src-payloadmin" min="0" max="100" step="0.1" value="0">
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="src-open">Open another file…</button>
+    </div>
     <div class="stage-bar">
       <span id="stat-flows"></span>
       <span class="sep">|</span>
@@ -513,5 +539,9 @@ var PALETTES = "{{PALETTES}}";
 </script>
 <script type="text/javascript">/*{{FLOWS_JS}}*/</script>
 <script type="text/javascript">/*{{DASHBOARD_JS}}*/</script>
+<!-- empty in a per-workbook build, which already has its data -->
+<script type="text/javascript">/*{{XLSX_JS}}*/</script>
+<script type="text/javascript">/*{{PARSE_JS}}*/</script>
+<script type="text/javascript">/*{{APP_JS}}*/</script>
 </body>
 </html>

@@ -234,6 +234,78 @@ cannot be redistributed here. If you have the official Grenfell Campus logo,
 drop it in as `gui_assets/grenfell-logo.png` and the header will pick it up; it
 is deliberately not vendored.
 
+## The browser build
+
+```bash
+python build_app.py            # -> sankey_app.html
+```
+
+One HTML file that reads any contribution tree. Drop an `.xlsx` on it and the
+reading, parsing and drawing all happen in the page: no server, no upload, and
+nothing to install for whoever you send it to.
+
+It is the same template, styles, flow pipeline and dashboard the per-workbook
+script emits, plus three files Python otherwise stands in for:
+
+| Path | Role |
+|---|---|
+| `sankey_assets/xlsx.js` | Reads the workbook |
+| `sankey_assets/parse.js` | The contribution-tree parser, ported from `generate_sankey.py` |
+| `sankey_assets/app.js` | Drop target, sheet picker, and the two ex-CLI flags |
+
+**No spreadsheet library.** An `.xlsx` is a ZIP of XML, and the browser now does
+both halves on its own — `DecompressionStream('deflate-raw')` for the archive,
+`DOMParser` for the XML — so `xlsx.js` is ~250 lines rather than ~900 KB of
+someone's general-purpose reader. It is deliberately partial: cell values only,
+no styles, no dates, and no `.xls`, which is a different pre-ZIP format
+entirely. It says so when handed one.
+
+**Live where the script was fixed.** `--max-depth` and `--payload-min` are
+baked in at generate time by the script; here the workbook is still in memory,
+so both re-parse on the spot. A multi-sheet workbook gets a picker, and the app
+opens on the first sheet that actually has a `Processes` header rather than
+whatever is first.
+
+**`dashboard.js` no longer starts itself.** It exposes
+`LCADashboard.start(payload, initial, palettes)`; a per-workbook build inlines
+its data as globals and calls it immediately, the drop-in build calls it per
+file. A second file rebuilds the control panel from its original markup — which
+drops that panel's listeners along with its nodes, rather than binding a second
+set over the first — and every closure checks it is still the current
+generation before drawing, so a superseded instance cannot paint over its
+replacement.
+
+### Keeping the port honest
+
+`parse.js` is a port, and a port is only worth having if something keeps
+checking it. `tools/verify_parse.py` prints digests of the payload the Python
+parser builds; `window.__lcaParityDigest(url, maxDepth, payloadMin)` prints the
+same digests from the browser. Every line has to match.
+
+```bash
+python tools/verify_parse.py contribution_tree.xlsx --max-depth 6
+# then, in the app's console:
+#   __lcaParityDigest('/contribution_tree.xlsx', 6, 0).then(console.log)
+```
+
+Floats are compared as 12-significant-digit exponential strings rather than
+hashed raw: both sides hold IEEE-754 doubles, but Python and JavaScript disagree
+about how to *print* them, and that is not a parsing bug.
+
+The two currently agree exactly on node count, link count, the name list, the
+resolved label list, all five link arrays and the root value, across a 3,688
+link / 1,420 process export at depths 3 and 6, with and without a payload
+floor.
+
+Three places in the port are load-bearing and look arbitrary:
+
+* a row's node cell must be a *string* — a number sitting in a name column is
+  not a node, and treating it as one invents a branch;
+* `path[depth]` is updated only for rows that survive the zero/NaN check, so a
+  skipped row never becomes the parent of the rows beneath it;
+* labels resolve in first-appearance order, because that is what decides which
+  of two colliding names keeps the plain form and which becomes `#2`.
+
 ## Command line
 
 ```
