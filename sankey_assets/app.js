@@ -47,6 +47,42 @@
 
   function clearError() { $('drop-error').hidden = true; }
 
+  /* Keep the branded theme buttons useful before a workbook is opened.  The
+     dashboard controller takes over the same controls after start(), but the
+     drop screen must not leave them decorative. */
+  function paintBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    var mode = global.__lcaTheme || 'auto';
+    var active = mode === 'auto' && window.matchMedia
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : mode;
+    light.setAttribute('aria-pressed', active === 'light' ? 'true' : 'false');
+    dark.setAttribute('aria-pressed', active === 'dark' ? 'true' : 'false');
+  }
+
+  function setBrandTheme(mode) {
+    global.__lcaTheme = mode;
+    document.documentElement.setAttribute('data-theme', mode === 'auto' ? '' : mode);
+    paintBrandTheme();
+  }
+
+  function wireBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    light.addEventListener('click', function () { setBrandTheme('light'); });
+    dark.addEventListener('click', function () { setBrandTheme('dark'); });
+    paintBrandTheme();
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var onScheme = function () {
+        if ((global.__lcaTheme || 'auto') === 'auto') paintBrandTheme();
+      };
+      if (mq.addEventListener) mq.addEventListener('change', onScheme);
+      else if (mq.addListener) mq.addListener(onScheme);
+    }
+  }
+
   /* Rebuild the control panel from its original markup before each start.
      wire() attaches listeners to every control, and a second file would
      otherwise bind them twice over — dropping the nodes drops the listeners
@@ -155,6 +191,7 @@
 
   /* ── wiring ───────────────────────────────────────────────────────────── */
   function wire() {
+    wireBrandTheme();
     var picker = $('drop-file');
     $('drop-pick').addEventListener('click', function () { picker.click(); });
     $('src-open').addEventListener('click', function () { picker.click(); });

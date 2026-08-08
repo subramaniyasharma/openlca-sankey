@@ -54,7 +54,7 @@
       labelAngle: 0,             // degrees, clockwise; 0 = horizontal
       decimals: 1,
       // colours
-      theme: 'auto',
+      theme: global.__lcaTheme || 'auto',
       palette: 'legaci',
       depthColors: null,         // null = take from the palette preset
       linkMode: 'depth',
@@ -893,6 +893,7 @@
   }
 
   function afterThemeChange() {
+    global.__lcaTheme = state.theme;
     document.documentElement.setAttribute(
       'data-theme', state.theme === 'auto' ? '' : state.theme);
     state.depthColors = null;
