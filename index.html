@@ -1,0 +1,3776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openLCA Sankey</title>
+<style>/* dashboard.css — shell and control panel for the Sankey dashboard.
+   Colours are the data-viz chrome tokens; every value is declared under both
+   the media query and the [data-theme] scope so the in-page toggle wins in
+   both directions. */
+
+:root {
+  color-scheme: light;
+  --surface:      #fcfcfb;
+  --plane:        #f9f9f7;
+  --ink:          #0b0b0b;
+  --ink-2:        #52514e;
+  --ink-muted:    #898781;
+  --rule:         #e1e0d9;
+  --border:       rgba(11, 11, 11, 0.10);
+  --field:        #ffffff;
+  --accent:       #2f7d4f;
+  --accent-soft:  rgba(47, 125, 79, 0.12);
+  --brand:        #2f7d4f;
+  --brand-soft:   rgba(47, 125, 79, 0.12);
+  --header-bg:    #ffffff;
+  --warn:         #b45309;
+  --shadow:       0 1px 2px rgba(11, 11, 11, 0.06), 0 8px 24px rgba(11, 11, 11, 0.06);
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --brand-sans: Carlito, Calibri, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --brand-mono-label: Arimo, Arial, Helvetica, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface:     #1a1a19;
+    --plane:       #0d0d0d;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --ink-muted:   #898781;
+    --rule:        #2c2c2a;
+    --border:      rgba(255, 255, 255, 0.10);
+    --field:       #232322;
+    --accent:      #4e9e6a;
+    --accent-soft: rgba(78, 158, 106, 0.18);
+    --brand:       #4e9e6a;
+    --brand-soft:  rgba(78, 158, 106, 0.18);
+    --header-bg:   #131312;
+    --warn:        #fab219;
+    --shadow:      0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface:     #1a1a19;
+  --plane:       #0d0d0d;
+  --ink:         #ffffff;
+  --ink-2:       #c3c2b7;
+  --ink-muted:   #898781;
+  --rule:        #2c2c2a;
+  --border:      rgba(255, 255, 255, 0.10);
+  --field:       #232322;
+  --accent:      #4e9e6a;
+  --accent-soft: rgba(78, 158, 106, 0.18);
+  --brand:       #4e9e6a;
+  --brand-soft:  rgba(78, 158, 106, 0.18);
+  --header-bg:   #131312;
+  --warn:        #fab219;
+  --shadow:      0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  /* column so the brand header can sit above the app without pushing the
+     stage past the viewport and adding a scrollbar */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font: 400 14px/1.45 var(--sans);
+  color: var(--ink);
+  background: var(--plane);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── shell ──────────────────────────────────────────────────────────────── */
+.app { display: flex; flex: 1 1 auto; min-height: 0; align-items: stretch; }
+/* the class rule outranks the UA's [hidden] { display: none }, so the drop
+   screen could not actually get the stage out of its way without this */
+.app[hidden] { display: none; }
+
+.stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.stage-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--ink-2);
+  flex-wrap: wrap;
+}
+
+.stage-bar strong { color: var(--ink); font-weight: 600; }
+.stage-bar .sep { color: var(--rule); }
+.stage-bar .warn { color: var(--warn); font-weight: 600; }
+.stage-bar .spacer { flex: 1 1 auto; }
+
+.chart-scroll { flex: 1 1 auto; overflow: auto; padding: 8px; }
+#chart { min-height: 480px; }
+
+/* numbered-label key */
+#node-key[hidden] { display: none; }
+#node-key {
+  margin: 4px 12px 28px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+.key-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.key-head h2 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0;
+}
+#key-list {
+  margin: 0;
+  padding-left: 28px;
+  columns: 2;
+  column-gap: 32px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+#key-list li { margin: 0 0 3px; break-inside: avoid; }
+#key-list li b { color: var(--ink); font-weight: 500; }
+#key-list li .pct { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { #key-list { columns: 1; } }
+
+/* ── panel ──────────────────────────────────────────────────────────────── */
+.panel {
+  flex: 0 0 340px;
+  width: 340px;
+  border-left: 1px solid var(--rule);
+  background: var(--plane);
+  max-height: 100vh;
+  overflow-y: auto;
+  position: sticky;
+  top: 0;
+}
+
+body.panel-hidden .panel { display: none; }
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  background: var(--plane);
+  z-index: 2;
+}
+
+.panel-head h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+.panel-head .meta { font-size: 11px; color: var(--ink-muted); margin-left: auto; }
+
+details.group { border-bottom: 1px solid var(--rule); }
+
+details.group > summary {
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.12s ease;
+}
+details.group[open] > summary::before { transform: rotate(90deg); }
+details.group > summary:hover { color: var(--ink); background: var(--accent-soft); }
+.group-body { padding: 4px 16px 14px; }
+
+/* ── rows ───────────────────────────────────────────────────────────────── */
+.row { display: flex; align-items: center; gap: 10px; margin: 9px 0; }
+.row > label { flex: 0 0 108px; font-size: 12px; color: var(--ink-2); }
+.row > .ctl { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.row .val { flex: 0 0 42px; text-align: right; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.row.stack { display: block; }
+.row.stack > label { display: block; margin-bottom: 5px; }
+.row.disabled { opacity: 0.42; pointer-events: none; }
+
+.hint { font-size: 11px; color: var(--ink-muted); margin: 6px 0 2px; }
+.hint.warn { color: var(--warn); }
+
+input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+
+input[type="text"], input[type="number"], select, textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+input[type="color"] {
+  flex: 0 0 30px;
+  width: 30px; height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--field);
+  cursor: pointer;
+}
+
+input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+/* segmented control — the mode switches read better as one than as a select */
+.seg { display: flex; width: 100%; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button {
+  flex: 1 1 0;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 4px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--field);
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--accent-soft); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 600; }
+
+button.btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--field);
+  color: var(--ink);
+  cursor: pointer;
+}
+button.btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.btn.primary:hover { filter: brightness(1.08); }
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 9px 0; }
+.btn-row > .btn { flex: 1 1 auto; }
+
+/* depth colour list */
+.depth-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.depth-row .swatch-label { flex: 1 1 auto; font-size: 12px; color: var(--ink-2); }
+.depth-row .count { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+/* node inspector */
+#inspector[hidden] { display: none; }
+#inspector { padding: 4px 16px 14px; }
+.inspector-name {
+  font-size: 11px;
+  color: var(--ink-muted);
+  word-break: break-word;
+  margin: 2px 0 10px;
+  padding: 7px 8px;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  max-height: 84px;
+  overflow: auto;
+}
+.inspector-stat { font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+.inspector-stat b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.empty-note { font-size: 12px; color: var(--ink-muted); padding: 2px 0 6px; }
+
+.chip {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+/* floating re-open button when the panel is collapsed */
+#panel-toggle {
+  position: fixed;
+  top: 12px; right: 12px;
+  z-index: 10;
+  box-shadow: var(--shadow);
+}
+body:not(.panel-hidden) #panel-toggle { display: none; }
+
+@media (max-width: 900px) {
+  .app { flex-direction: column; }
+  .panel {
+    flex: 1 1 auto;
+    width: auto;
+    max-height: 55vh;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+    position: static;
+  }
+}
+
+@media print {
+  .panel, .stage-bar, #panel-toggle { display: none !important; }
+  body, .stage { background: #fff; }
+}
+
+/* ── drop-in build ──────────────────────────────────────────────────────── */
+/* Only the per-file chrome: the drop target, and the bar carrying the things
+   that used to be command-line flags.  Deliberately plain. */
+/* A flex child rather than a fixed overlay, so the brand header stays visible
+   above it the way the mockup has it. */
+#drop {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  text-align: center;
+}
+#drop[hidden] { display: none; }
+#drop-inner { max-width: 30rem; padding: 2rem; }
+#drop-inner h1 { margin: 0 0 .75rem; font-size: 1.5rem; }
+#drop-inner p { margin: .5rem 0; color: var(--ink-soft); }
+#drop-error {
+  margin-top: 1rem;
+  padding: .6rem .8rem;
+  border: 1px solid var(--negative, #d03b3b);
+  border-radius: 6px;
+  color: var(--negative, #d03b3b);
+  text-align: left;
+  white-space: pre-wrap;
+}
+#drop-error[hidden] { display: none; }
+body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-offset: 1rem; }
+
+#source-bar { gap: .5rem; flex-wrap: wrap; }
+#source-bar[hidden] { display: none; }
+#source-bar label { color: var(--ink-soft); }
+#source-bar select,
+#source-bar input[type="number"] {
+  background: var(--field, transparent);
+  color: inherit;
+  border: 1px solid var(--rule, rgba(128,128,128,.4));
+  border-radius: 4px;
+  padding: 1px 4px;
+  font: inherit;
+}
+#source-bar input[type="number"] { width: 4.5rem; }
+#src-name { font-weight: 600; }
+
+/* ── brand header ───────────────────────────────────────────────────────── */
+/* From the LEGACI Sankey mockup (Claude Design, "Live dashboard UI mockups").
+   Type follows the BEAS/Grenfell system: Carlito/Calibri for the wordmark,
+   Arimo/Arial for the uppercase functional label.  The webfonts are NOT
+   fetched — a generated dashboard is meant to work with no network at all, and
+   on the machines this runs on the real Calibri and Arial are installed. */
+#brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  background: var(--header-bg);
+  border-bottom: 3px solid var(--brand);
+  flex: 0 0 auto;
+}
+#brand-header[hidden] { display: none; }
+#brand-logo { width: 34px; height: 34px; object-fit: contain; flex: 0 0 auto; }
+#brand-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+#brand-name {
+  font: 700 13px/1.15 var(--brand-sans);
+  letter-spacing: .01em;
+  color: var(--ink);
+}
+#brand-lab {
+  font: 400 10px/1.2 var(--brand-mono-label);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+#brand-spacer { flex: 1 1 auto; }
+#brand-tag {
+  font: 600 9.5px/1 var(--brand-mono-label);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: 3px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+#brand-theme {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+#brand-theme button {
+  font: 600 10px/1 var(--brand-mono-label);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 6px 9px;
+  border: 0;
+  cursor: pointer;
+  background: var(--field);
+  color: var(--ink-2);
+}
+#brand-theme button + button { border-left: 1px solid var(--border); }
+#brand-theme button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+#brand-source { font-size: 11px; color: var(--ink-muted); }
+
+@media (max-width: 720px) {
+  #brand-lab, #brand-source { display: none; }
+}
+</style>
+<script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+</head>
+<body>
+
+<button id="panel-toggle" class="btn" type="button">Controls</button>
+
+<!-- LEGACI brand header — from the Claude Design mockup. The logo is inlined
+     as a data URI so a generated file still needs nothing from the network. -->
+<header id="brand-header">
+  <img id="brand-logo" src="data:image/png;base64,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" alt="LEGACI">
+  <div id="brand-titles">
+    <div id="brand-name">LCA-Sankey Tool</div>
+    <div id="brand-lab">Laboratory for Eco-design, Green Chemistry and Circular Innovation</div>
+  </div>
+  <div id="brand-spacer"></div>
+  <span id="brand-tag">Open source</span>
+  <div id="brand-theme">
+    <button type="button" id="brand-light" aria-pressed="false">Light</button>
+    <button type="button" id="brand-dark" aria-pressed="false">Dark</button>
+  </div>
+  <span id="brand-source"></span>
+</header>
+
+<!-- The drop-in build turns these on; a per-workbook build leaves them hidden
+     and the markup costs it nothing. -->
+<div id="drop" hidden>
+  <div id="drop-inner">
+    <h1>openLCA Sankey</h1>
+    <p>Drop a contribution-tree <b>.xlsx</b> here</p>
+    <p><button class="btn" type="button" id="drop-pick">Choose a file…</button></p>
+    <input type="file" id="drop-file" accept=".xlsx" hidden>
+    <p id="drop-note">Everything is read and drawn in this browser. The file is
+      never uploaded.</p>
+    <p id="drop-error" hidden></p>
+  </div>
+</div>
+
+<div class="app">
+  <div class="stage">
+    <div class="stage-bar" id="source-bar" hidden>
+      <span id="src-name"></span>
+      <span class="sep">|</span>
+      <label for="src-sheet">Sheet</label>
+      <select id="src-sheet"></select>
+      <label for="src-maxdepth">Depth</label>
+      <input type="number" id="src-maxdepth" min="1" max="10" step="1" value="6">
+      <label for="src-payloadmin">Drop below %</label>
+      <input type="number" id="src-payloadmin" min="0" max="100" step="0.1" value="0">
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="src-open">Open another file…</button>
+    </div>
+    <div class="stage-bar">
+      <span id="stat-flows"></span>
+      <span class="sep">|</span>
+      <span id="stat-nodes"></span>
+      <span id="stat-extra"></span>
+      <span class="spacer"></span>
+      <span id="stat-gap"></span>
+    </div>
+    <div class="chart-scroll">
+      <div id="chart"></div>
+      <!-- shown only in numbered-label mode: the key that makes short numeric
+           labels usable in a paper -->
+      <section id="node-key" hidden>
+        <div class="key-head">
+          <h2>Process key</h2>
+          <button class="btn" type="button" id="c-copykey">Copy as table</button>
+        </div>
+        <ol id="key-list"></ol>
+      </section>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head">
+      <h1>Diagram controls</h1>
+      <span class="meta" id="meta-source"></span>
+    </div>
+
+    <!-- ── DATA ──────────────────────────────────────────────────────── -->
+    <details class="group" open>
+      <summary>Data</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-levels">Levels</label>
+          <div class="ctl">
+            <input type="range" id="c-levels" min="2" max="7" step="1">
+            <span class="val" id="v-levels"></span>
+          </div>
+        </div>
+        <p class="hint" id="levels-hint"></p>
+
+        <div class="row stack">
+          <label>Small flows</label>
+          <div class="seg" id="c-small">
+            <button type="button" data-value="all">Show all</button>
+            <button type="button" data-value="pool">Pool into "other"</button>
+            <button type="button" data-value="hide">Hide</button>
+          </div>
+        </div>
+
+        <div class="row" id="row-threshold">
+          <label for="c-threshold">Threshold</label>
+          <div class="ctl">
+            <input type="range" id="c-threshold" min="0" max="20" step="0.1">
+            <span class="val" id="v-threshold"></span>
+          </div>
+        </div>
+        <p class="hint">Measured against each flow's own parent, not the root.</p>
+
+        <div class="row">
+          <label for="c-maxnodes">Max nodes</label>
+          <div class="ctl">
+            <input type="range" id="c-maxnodes" min="0" max="300" step="1">
+            <span class="val" id="v-maxnodes"></span>
+          </div>
+        </div>
+        <p class="hint">Keeps only the largest contributors, the way openLCA's
+          own Sankey does. 0 keeps everything.</p>
+
+        <div class="row stack">
+          <label>Root balance</label>
+          <div class="seg" id="c-balance">
+            <button type="button" data-value="off">Unbalanced</button>
+            <button type="button" data-value="on">Add "direct + unresolved"</button>
+          </div>
+        </div>
+        <p class="hint" id="balance-hint"></p>
+      </div>
+    </details>
+
+    <!-- ── TYPOGRAPHY ────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Typography</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-font">Font</label>
+          <div class="ctl">
+            <select id="c-font">
+              <option value='system-ui, -apple-system, "Segoe UI", sans-serif'>System sans</option>
+              <option value="Inter, system-ui, sans-serif">Inter</option>
+              <option value="Arial, Helvetica, sans-serif">Arial</option>
+              <option value="Helvetica, Arial, sans-serif">Helvetica</option>
+              <option value='"Segoe UI", system-ui, sans-serif'>Segoe UI</option>
+              <option value="Roboto, system-ui, sans-serif">Roboto</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+              <option value='"Courier New", monospace'>Courier New</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-fontsize">Base size</label>
+          <div class="ctl">
+            <input type="range" id="c-fontsize" min="8" max="24" step="1">
+            <span class="val" id="v-fontsize"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelsize">Label size</label>
+          <div class="ctl">
+            <input type="range" id="c-labelsize" min="6" max="28" step="1">
+            <span class="val" id="v-labelsize"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelcolor">Label colour</label>
+          <div class="ctl">
+            <input type="color" id="c-labelcolor">
+            <button class="btn" type="button" id="c-labelcolor-auto">Auto</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-hoversize">Hover size</label>
+          <div class="ctl">
+            <input type="range" id="c-hoversize" min="8" max="22" step="1">
+            <span class="val" id="v-hoversize"></span>
+          </div>
+        </div>
+
+        <div class="row stack">
+          <label for="c-title">Title</label>
+          <input type="text" id="c-title">
+        </div>
+        <div class="row">
+          <label for="c-titlesize">Title size</label>
+          <div class="ctl">
+            <input type="range" id="c-titlesize" min="10" max="40" step="1">
+            <span class="val" id="v-titlesize"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-titlealign">Title align</label>
+          <div class="ctl">
+            <select id="c-titlealign">
+              <option value="left">Left</option>
+              <option value="center">Centre</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-titlebold">Bold title</label>
+          <div class="ctl"><input type="checkbox" id="c-titlebold"></div>
+        </div>
+        <p class="hint">Annotations — including any label you detach from a
+          node — can be dragged and retyped directly on the diagram.</p>
+      </div>
+    </details>
+
+    <!-- ── LABELS ────────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Labels</summary>
+      <div class="group-body">
+        <div class="row stack">
+          <label>Show</label>
+          <div class="seg" id="c-labelmode">
+            <button type="button" data-value="name">Name</button>
+            <button type="button" data-value="both">Name+%</button>
+            <button type="button" data-value="pct">%</button>
+            <button type="button" data-value="number">No.</button>
+            <button type="button" data-value="none">None</button>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelsource">Text</label>
+          <div class="ctl">
+            <select id="c-labelsource">
+              <option value="short">Short name (trimmed at "|")</option>
+              <option value="full">Full process name</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-wrap">Wrap at</label>
+          <div class="ctl">
+            <input type="range" id="c-wrap" min="8" max="80" step="1">
+            <span class="val" id="v-wrap"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-truncate">Truncate</label>
+          <div class="ctl">
+            <input type="range" id="c-truncate" min="0" max="120" step="1">
+            <span class="val" id="v-truncate"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelcutoff">Only label ≥</label>
+          <div class="ctl">
+            <input type="range" id="c-labelcutoff" min="0" max="10" step="0.1">
+            <span class="val" id="v-labelcutoff"></span>
+          </div>
+        </div>
+        <p class="hint">Silences labels on hairline nodes without removing
+          them from the diagram — the data is untouched.</p>
+        <div class="row">
+          <label for="c-align">Align</label>
+          <div class="ctl">
+            <select id="c-align">
+              <option value="justify">Justify</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+              <option value="center">Centre</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-labelside">Label side</label>
+          <div class="ctl">
+            <select id="c-labelside">
+              <option value="auto">Automatic</option>
+              <option value="right">Always right of the node</option>
+              <option value="left">Always left of the node</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Plotly decides the side from the node's position alone,
+          so the deepest column — the one carrying the long ecoinvent names —
+          gets its labels turned inward, over the diagram.
+          <b>Always right</b> puts the end nodes' labels out past the diagram
+          and widens the margin to hold them.</p>
+        <div class="row">
+          <label for="c-labelangle">Orientation</label>
+          <div class="ctl">
+            <input type="range" id="c-labelangle" min="-90" max="90" step="15">
+            <span class="val" id="v-labelangle"></span>
+          </div>
+        </div>
+        <p class="hint">Turns every node label about the point where it meets
+          its node. ±90° stands them upright, which is what a narrow column
+          wants; the canvas grows to make room. Also applied to the exported
+          PNG and SVG.</p>
+        <div class="row">
+          <label for="c-decimals">Decimals</label>
+          <div class="ctl">
+            <input type="range" id="c-decimals" min="0" max="3" step="1">
+            <span class="val" id="v-decimals"></span>
+          </div>
+        </div>
+        <p class="hint">Click any node on the diagram to rename it, recolour it,
+          or detach its label as a free-floating, draggable annotation.</p>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-addtext">Add free text</button>
+          <button class="btn" type="button" id="c-clearann">Clear annotations</button>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── COLOURS ───────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Colours</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-theme">Theme</label>
+          <div class="ctl">
+            <select id="c-theme">
+              <option value="auto">Follow system</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-palette">Palette</label>
+          <div class="ctl"><select id="c-palette"></select></div>
+        </div>
+        <p class="hint" id="palette-hint"></p>
+
+        <div id="depth-colors"></div>
+
+        <div class="row">
+          <label for="c-linkmode">Link colour</label>
+          <div class="ctl">
+            <select id="c-linkmode">
+              <option value="depth">By depth</option>
+              <option value="source">By source node</option>
+              <option value="target">By target node</option>
+              <option value="uniform">Uniform</option>
+              <option value="magnitude">By magnitude</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" id="row-linkcolor">
+          <label for="c-linkcolor">Link colour</label>
+          <div class="ctl"><input type="color" id="c-linkcolor"></div>
+        </div>
+        <div class="row">
+          <label for="c-linkalpha">Link opacity</label>
+          <div class="ctl">
+            <input type="range" id="c-linkalpha" min="0.05" max="1" step="0.01">
+            <span class="val" id="v-linkalpha"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-negcolor">Negative flows</label>
+          <div class="ctl"><input type="color" id="c-negcolor"></div>
+        </div>
+        <div class="row">
+          <label for="c-bordercolor">Node border</label>
+          <div class="ctl">
+            <input type="color" id="c-bordercolor">
+            <input type="range" id="c-borderwidth" min="0" max="4" step="0.5">
+            <span class="val" id="v-borderwidth"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-bg">Background</label>
+          <div class="ctl">
+            <input type="color" id="c-bg">
+            <button class="btn" type="button" id="c-bg-auto">Auto</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── LAYOUT ────────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Layout</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-placement">Placement</label>
+          <div class="ctl">
+            <select id="c-placement">
+              <option value="auto">Aligned to parent</option>
+              <option value="weighted">Value-weighted columns</option>
+              <option value="even">Even columns by depth</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint"><b>Aligned</b> keeps each node inside the vertical span
+          of the ribbon feeding it, so the near columns read as straight bands.
+          The other two place each column against its own total instead, which
+          spreads a column over the full height and pulls children away from
+          their parents — useful for reading one column on its own, but it is
+          what turns the first levels into a fan.</p>
+        <div class="row">
+          <label for="c-arrangement">Dragging</label>
+          <div class="ctl">
+            <select id="c-arrangement">
+              <option value="snap">Snap</option>
+              <option value="freeform">Freeform</option>
+              <option value="perpendicular">Perpendicular</option>
+              <option value="fixed">Fixed (no dragging)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-pad">Node gap</label>
+          <div class="ctl">
+            <input type="range" id="c-pad" min="2" max="60" step="1">
+            <span class="val" id="v-pad"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-thickness">Node width</label>
+          <div class="ctl">
+            <input type="range" id="c-thickness" min="4" max="60" step="1">
+            <span class="val" id="v-thickness"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-autoheight">Auto height</label>
+          <div class="ctl"><input type="checkbox" id="c-autoheight"></div>
+        </div>
+        <div class="row" id="row-height">
+          <label for="c-height">Height</label>
+          <div class="ctl">
+            <input type="range" id="c-height" min="300" max="6000" step="20">
+            <span class="val" id="v-height"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-fitwidth">Fit width</label>
+          <div class="ctl"><input type="checkbox" id="c-fitwidth"></div>
+        </div>
+        <div class="row" id="row-width">
+          <label for="c-width">Width</label>
+          <div class="ctl">
+            <input type="range" id="c-width" min="400" max="3200" step="20">
+            <span class="val" id="v-width"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-marginx">Side margin</label>
+          <div class="ctl">
+            <input type="range" id="c-marginx" min="0" max="300" step="4">
+            <span class="val" id="v-marginx"></span>
+          </div>
+        </div>
+        <div class="row">
+          <label for="c-margintop">Top margin</label>
+          <div class="ctl">
+            <input type="range" id="c-margintop" min="0" max="240" step="4">
+            <span class="val" id="v-margintop"></span>
+          </div>
+        </div>
+        <p class="hint">Drag nodes on the diagram to move them; the positions
+          stick until you reset them.</p>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-resetpos">Reset dragged positions</button>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── SELECTED NODE ─────────────────────────────────────────────── -->
+    <details class="group" id="group-node" open>
+      <summary>Selected node</summary>
+      <div class="group-body">
+        <p class="empty-note" id="inspector-empty">
+          Click a node on the diagram to edit it.
+        </p>
+        <div id="inspector" hidden>
+          <div class="inspector-name" id="i-full"></div>
+          <div class="inspector-stat" id="i-stat"></div>
+          <div class="row stack">
+            <label for="i-label">Label</label>
+            <input type="text" id="i-label">
+          </div>
+          <div class="row">
+            <label for="i-color">Colour</label>
+            <div class="ctl">
+              <input type="color" id="i-color">
+              <button class="btn" type="button" id="i-color-reset">Depth</button>
+            </div>
+          </div>
+          <div class="row">
+            <label for="i-hide">Hide label</label>
+            <div class="ctl"><input type="checkbox" id="i-hide"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" id="i-detach">Detach label</button>
+            <button class="btn" type="button" id="i-reset">Reset node</button>
+          </div>
+          <p class="hint">A detached label becomes an annotation you can drag
+            anywhere and retype in place — and it can carry its own size.</p>
+        </div>
+      </div>
+    </details>
+
+    <!-- ── EXPORT ────────────────────────────────────────────────────── -->
+    <details class="group">
+      <summary>Export &amp; settings</summary>
+      <div class="group-body">
+        <div class="row">
+          <label for="c-scale">PNG scale</label>
+          <div class="ctl">
+            <input type="range" id="c-scale" min="1" max="5" step="1">
+            <span class="val" id="v-scale"></span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" type="button" id="c-png">Download PNG</button>
+          <button class="btn" type="button" id="c-svg">SVG</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-save">Save style</button>
+          <button class="btn" type="button" id="c-load">Load style</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-csv">Flows as CSV</button>
+          <button class="btn" type="button" id="c-reset">Reset all</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="c-publication">Publication preset</button>
+        </div>
+        <p class="hint">The preset switches to the print palette on a white
+          ground with black text, and numbers the nodes with a key below the
+          diagram.</p>
+        <p class="hint" id="save-note">Changes are remembered in this browser.</p>
+        <input type="file" id="c-loadfile" accept="application/json" hidden>
+      </div>
+    </details>
+
+    <div class="btn-row" style="padding: 12px 16px 24px;">
+      <button class="btn" type="button" id="c-hidepanel">Hide panel</button>
+    </div>
+  </aside>
+</div>
+
+<!-- filled only when the page is opened with ?dumpFlows=1, so a headless
+     browser can hand the JS pipeline's output to tools/verify_flows.py -->
+<pre id="flow-dump" hidden></pre>
+
+<script type="text/javascript">
+var PAYLOAD = null;
+var INITIAL = null;
+var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#2c7a85","#6a9a3a","#8a6d3b","#5f5a4e"],"dark":["#4e9e6a","#c8a24a","#3e8e9c","#7fb25a","#9a7b4f","#6f6a5e"]},"categorical":{"label":"Categorical (validated)","light":["#2a78d6","#eb6834","#1baf7a","#eda100","#e87ba4","#008300"],"dark":["#3987e5","#d95926","#199e70","#c98500","#d55181","#008300"]},"depth-ramp":{"label":"Depth ramp — blue (max 5)","light":["#0d366b","#184f95","#256abf","#3987e5","#6da7ec"],"dark":["#cde2fb","#9ec5f4","#6da7ec","#3987e5","#256abf"]},"print":{"label":"Print / grayscale","light":["#31291d","#494135","#625a4e","#7d7569","#989084","#b5ada1"],"dark":["#645c50","#7a7266","#91897d","#a8a094","#bfb7ab","#d8d0c4"]},"legacy":{"label":"Legacy (original script — fails a11y checks)","light":["#1B4F72","#2E86C1","#17A589","#D4AC0D","#CA6F1E","#884EA0"],"dark":["#1B4F72","#2E86C1","#17A589","#D4AC0D","#CA6F1E","#884EA0"]}};
+</script>
+<script type="text/javascript">/*
+ * flows.js — the contribution-tree flow pipeline.
+ *
+ * This is the single implementation of the pipeline that used to live in
+ * generate_sankey.py's build_flows().  It is a faithful port: the reference is
+ * preserved verbatim in tools/verify_flows.py and the two are diffed as part of
+ * verification (see README_sankey.md).
+ *
+ * Two steps the original applied unconditionally are options here, and both
+ * default to OFF, so the dashboard opens showing the tree exactly as openLCA
+ * reported it:
+ *
+ *   smallMode  'all'  draw every flow             (default)
+ *              'pool' roll sub-threshold flows into "... — other (N)" nodes
+ *              'hide' drop them outright
+ *   balance    false  leave the root unbalanced   (default)
+ *              true   add the "direct emissions + unresolved" link
+ *
+ * Cycle-breaking is not optional: Plotly's Sankey cannot render a cycle.
+ */
+(function (global) {
+  'use strict';
+
+  var OTHER_SUFFIX = ' — other';
+  var UNRESOLVED = 'direct emissions + unresolved';
+
+  /* Mirrors the reference DFS exactly: can we already reach `source` from
+     `target`?  If so the new edge would close a loop. */
+  function createsCycle(adjacency, source, target) {
+    var stack = [target];
+    var seen = Object.create(null);
+    while (stack.length) {
+      var node = stack.pop();
+      if (node === source) return true;
+      if (seen[node]) continue;
+      seen[node] = true;
+      var next = adjacency[node];
+      if (next) stack.push.apply(stack, next);
+    }
+    return false;
+  }
+
+  /* Aggregate raw links to unique (source, target, depth) rows.
+
+     The reference does this with a pandas groupby, which sorts by the group
+     keys; we sort to match so the pooling stage below walks the rows in the
+     same order. */
+  function aggregate(payload, levels) {
+    var link = payload.links;
+    var shorts = payload.shorts;
+    var bucket = Object.create(null);
+    var rows = [];
+
+    for (var i = 0; i < link.d.length; i++) {
+      var depth = link.d[i];
+      if (depth <= 0 || depth >= levels) continue;      // reference: 0 < d < levels
+      var source = shorts[link.s[i]];
+      var target = shorts[link.t[i]];
+      var key = source + ' ' + target + ' ' + depth;
+      var row = bucket[key];
+      if (!row) {
+        row = { source: source, target: target, depth: depth,
+                value: 0, negative: false };
+        bucket[key] = row;
+        rows.push(row);
+      }
+      row.value += link.v[i];
+      if (link.n[i]) row.negative = true;
+    }
+
+    rows.sort(function (a, b) {
+      if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+      if (a.target !== b.target) return a.target < b.target ? -1 : 1;
+      return a.depth - b.depth;
+    });
+    return rows;
+  }
+
+  /* Small-flow handling, measured against the PARENT's total — never against
+     the root, so a 3% flow under a small parent survives. */
+  function handleSmall(rows, mode, threshold, stats) {
+    if (mode === 'all' || !(threshold > 0)) return rows;
+
+    var groups = Object.create(null);
+    var order = [];
+    rows.forEach(function (row) {
+      var key = row.source + ' ' + row.depth;
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(row);
+    });
+
+    var kept = [];
+    var pooled = [];
+    order.forEach(function (key) {
+      var group = groups[key];
+      var total = group.reduce(function (sum, r) { return sum + r.value; }, 0);
+      if (total <= 0 || group.length === 1) {
+        kept.push.apply(kept, group);
+        return;
+      }
+      var cut = (threshold / 100) * total;
+      var small = group.filter(function (r) { return r.value < cut; });
+      var big = group.filter(function (r) { return r.value >= cut; });
+
+      // Never strip a parent of every child.  Pooling additionally needs at
+      // least two flows to be worth a node — the reference's `small.sum() < 2`
+      // guard; hiding a lone small flow is fine, so that guard is pooling-only.
+      if (!big.length || !small.length ||
+          (mode === 'pool' && small.length < 2)) {
+        kept.push.apply(kept, group);
+        return;
+      }
+
+      kept.push.apply(kept, big);
+      stats.pooled += small.length;
+      if (mode === 'pool') {
+        pooled.push({
+          source: group[0].source,
+          target: group[0].source + OTHER_SUFFIX +
+                  ' (' + small.length + ' small flows)',
+          depth: group[0].depth,
+          value: small.reduce(function (sum, r) { return sum + r.value; }, 0),
+          negative: false,
+          synthetic: 'pooled'
+        });
+      }
+    });
+
+    if (pooled.length) stats.otherNodes = pooled.length;
+    return kept.concat(pooled);
+  }
+
+  /* Keep only the N largest nodes, the way openLCA's own Sankey does it
+     (SankeyConfig.maxCount, which defaults to min(techFlowCount, 25) there).
+     Ranking is by what flows INTO a node — its contribution — with the roots
+     always kept.  Anything stranded by the cut is removed by the prune below. */
+  function limitNodes(rows, maxNodes, stats) {
+    if (!maxNodes || maxNodes <= 0) return rows;
+
+    var incoming = Object.create(null);
+    var outgoing = Object.create(null);
+    var roots = Object.create(null);
+    rows.forEach(function (row) {
+      incoming[row.target] = (incoming[row.target] || 0) + row.value;
+      outgoing[row.source] = (outgoing[row.source] || 0) + row.value;
+      if (row.depth === 1) roots[row.source] = true;
+    });
+
+    var names = {};
+    rows.forEach(function (row) { names[row.source] = names[row.target] = true; });
+    var ranked = Object.keys(names).sort(function (a, b) {
+      var wa = incoming[a] != null ? incoming[a] : (outgoing[a] || 0);
+      var wb = incoming[b] != null ? incoming[b] : (outgoing[b] || 0);
+      if (wa !== wb) return wb - wa;
+      return a < b ? -1 : 1;
+    });
+    if (ranked.length <= maxNodes) return rows;
+
+    var keep = Object.create(null);
+    Object.keys(roots).forEach(function (name) { keep[name] = true; });
+    for (var i = 0; i < ranked.length && Object.keys(keep).length < maxNodes; i++) {
+      keep[ranked[i]] = true;
+    }
+
+    var kept = rows.filter(function (row) {
+      return keep[row.source] && keep[row.target];
+    });
+    stats.overCap = ranked.length - Object.keys(keep).length;
+    return kept;
+  }
+
+  /* Pooling or hiding a flow strands whatever hung below it: the children are
+     still in the table, but nothing reaches their parent any more, so Plotly
+     draws them as a floating subtree that looks like a real contribution.  The
+     original pipeline had this too — at six levels it left ~70% of the flows
+     detached — so we walk out from the root and drop anything unreachable.
+
+     Only pooling and hiding can strand a node, so with `smallMode: 'all'` this
+     is a no-op. */
+  function pruneUnreachable(rows, stats) {
+    var roots = Object.create(null);
+    var bySource = Object.create(null);
+    rows.forEach(function (row) {
+      if (row.depth === 1) roots[row.source] = true;
+      (bySource[row.source] || (bySource[row.source] = [])).push(row);
+    });
+
+    var reachable = Object.create(null);
+    var stack = Object.keys(roots);
+    stack.forEach(function (name) { reachable[name] = true; });
+    while (stack.length) {
+      var node = stack.pop();
+      var out = bySource[node];
+      if (!out) continue;
+      for (var i = 0; i < out.length; i++) {
+        var next = out[i].target;
+        if (!reachable[next]) { reachable[next] = true; stack.push(next); }
+      }
+    }
+
+    var kept = rows.filter(function (row) { return reachable[row.source]; });
+    stats.detached = rows.length - kept.length;
+    return kept;
+  }
+
+  /* The depth-1 children of an LCA tree never sum to the root: the remainder is
+     the process's own direct emissions plus anything openLCA could not resolve.
+     We always report the gap; drawing it is opt-in. */
+  function handleBalance(rows, enabled, threshold, smallMode, stats) {
+    var level1 = rows.filter(function (r) { return r.depth === 1; });
+    if (!level1.length) return rows;
+
+    var gap = 100 - level1.reduce(function (sum, r) { return sum + r.value; }, 0);
+    stats.gap = gap;
+    if (!enabled) return rows;
+
+    // The reference compares against the threshold; with no threshold active
+    // any positive gap is worth drawing — but not a numerically-zero one, or a
+    // tree whose children already sum to the root gains a degenerate node.
+    var floor = Math.max(smallMode === 'all' ? 0 : threshold, 1e-6);
+    if (gap <= floor) return rows;
+
+    return rows.concat([{
+      source: level1[0].source,
+      target: UNRESOLVED,
+      depth: 1,
+      value: gap,
+      negative: false,
+      synthetic: 'unresolved'
+    }]);
+  }
+
+  function breakCycles(rows, stats) {
+    var sorted = rows.slice().sort(function (a, b) {
+      if (b.value !== a.value) return b.value - a.value;
+      // deterministic tie-break, so repeated renders never differ
+      if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+      return a.target < b.target ? -1 : 1;
+    });
+
+    var adjacency = Object.create(null);
+    var kept = [];
+    sorted.forEach(function (row) {
+      if (createsCycle(adjacency, row.source, row.target)) {
+        stats.cyclesDropped++;
+        return;
+      }
+      (adjacency[row.source] || (adjacency[row.source] = [])).push(row.target);
+      kept.push(row);
+    });
+    return kept;
+  }
+
+  /*
+   * buildFlows(payload, opts) -> {flows, depthOf, nodeTotals, stats}
+   *
+   * opts: {levels, smallMode: 'all'|'pool'|'hide', threshold, balance,
+   *        prune}   — prune defaults to true; tools/verify_flows.py comparisons
+   *                   pass false, since the reference pipeline never pruned
+   */
+  function buildFlows(payload, opts) {
+    var stats = { pooled: 0, otherNodes: 0, gap: 0, cyclesDropped: 0,
+                  detached: 0, overCap: 0, flows: 0, nodes: 0 };
+
+    var rows = aggregate(payload, opts.levels);
+    rows = handleSmall(rows, opts.smallMode, opts.threshold, stats);
+    rows = limitNodes(rows, opts.maxNodes, stats);
+    if (opts.prune !== false) rows = pruneUnreachable(rows, stats);
+    rows = handleBalance(rows, opts.balance, opts.threshold, opts.smallMode, stats);
+    var flows = breakCycles(rows, stats);
+
+    // Reference semantics: a source takes the first depth it is seen at, a
+    // target the last.  Kept identical so node columns match.
+    var depthOf = Object.create(null);
+    var incoming = Object.create(null);
+    var outgoing = Object.create(null);
+    flows.forEach(function (row) {
+      if (!(row.source in depthOf)) depthOf[row.source] = row.depth - 1;
+      depthOf[row.target] = row.depth;
+      outgoing[row.source] = (outgoing[row.source] || 0) + row.value;
+      incoming[row.target] = (incoming[row.target] || 0) + row.value;
+    });
+
+    // What a node "is worth": what flows into it, or for the root, out of it.
+    var nodeTotals = Object.create(null);
+    Object.keys(depthOf).forEach(function (name) {
+      nodeTotals[name] = incoming[name] != null ? incoming[name]
+                                                : (outgoing[name] || 0);
+    });
+
+    stats.flows = flows.length;
+    stats.nodes = Object.keys(depthOf).length;
+    return { flows: flows, depthOf: depthOf, nodeTotals: nodeTotals,
+             incoming: incoming, outgoing: outgoing, stats: stats };
+  }
+
+  global.LCAFlows = { buildFlows: buildFlows, UNRESOLVED: UNRESOLVED };
+}(this));
+</script>
+<script type="text/javascript">/*
+ * dashboard.js — controls, figure building and export for the Sankey dashboard.
+ *
+ * Reads the inlined PAYLOAD/INITIAL/PALETTES globals, runs LCAFlows.buildFlows
+ * on every data change, and re-renders through Plotly.react when only the
+ * styling moved — which keeps drag and hover state — or Plotly.newPlot when the
+ * node set itself changed, which is the only way to stop Plotly stranding the
+ * previous set's nodes in the DOM.  Written in ES5 so the generated file works
+ * in older browsers and can be exercised by a plain script host.
+ */
+(function (global) {
+  'use strict';
+
+  /* Each start() supersedes the one before it.  A dropped file rebuilds the
+     control panel from scratch, which drops that panel's listeners with the
+     nodes they were on, but a previous instance can still be holding a theme
+     listener or a pending retry — so every closure checks that it is still the
+     current generation before it draws anything. */
+  var generation = 0;
+
+  function start(PAYLOAD, INITIAL, PALETTES) {
+  var myGeneration = ++generation;
+  var gd = document.getElementById('chart');
+  var META = PAYLOAD.meta || {};
+  var STORE_KEY = 'lca-sankey:' + (META.source || 'default');
+
+  /* ── defaults ─────────────────────────────────────────────────────────── */
+  function defaults() {
+    return {
+      // data
+      levels: INITIAL.levels,
+      smallMode: INITIAL.smallMode,
+      threshold: INITIAL.threshold,
+      maxNodes: INITIAL.maxNodes,
+      balance: INITIAL.balance,
+      // typography
+      font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+      fontSize: 13,
+      labelSize: 12,
+      labelColor: null,          // null = follow theme
+      hoverSize: 12,
+      title: META.title || '',
+      titleSize: 17,
+      titleAlign: 'center',
+      titleBold: true,
+      // labels
+      labelMode: 'name',
+      labelSource: 'short',
+      wrap: 30,
+      truncate: 0,               // 0 = no truncation
+      labelCutoff: 0,            // % below which a node goes unlabelled
+      align: 'justify',
+      labelSide: 'auto',         // auto | right | left — which side of the node
+      labelAngle: 0,             // degrees, clockwise; 0 = horizontal
+      decimals: 1,
+      // colours
+      theme: 'auto',
+      palette: 'legaci',
+      depthColors: null,         // null = take from the palette preset
+      linkMode: 'depth',
+      linkColor: '#2a78d6',
+      linkAlpha: 0.32,
+      negativeColor: INITIAL.negativeColor,
+      borderColor: null,         // null = follow theme
+      borderWidth: 0.5,
+      background: null,          // null = follow theme
+      // layout
+      // Plotly's own Sankey layout is the one that keeps a child inside the
+      // span of the ribbon feeding it; the column-at-a-time placements below
+      // stack each column against its own total instead, which is what turns
+      // the near columns into a fan.  See README_sankey.md.
+      placement: 'auto',
+      arrangement: 'snap',
+      pad: 18,
+      thickness: 18,
+      autoHeight: true,
+      height: 900,
+      fitWidth: true,
+      width: 1400,
+      marginX: 24,
+      marginTop: 64,
+      // extras
+      scale: 2,
+      nodeOverrides: {},         // label -> {label, color, hidden}
+      nodePos: {},               // label -> {x, y} from dragging
+      annotations: []
+    };
+  }
+
+  var state = defaults();
+  var view = null;               // latest buildFlows result
+  var selected = null;           // label of the node in the inspector
+  var suspendSync = false;
+
+  /* ── tiny helpers ─────────────────────────────────────────────────────── */
+  function $(id) { return document.getElementById(id); }
+
+  function esc(text) {
+    return String(text).replace(/&/g, '&amp;')
+                       .replace(/</g, '&lt;')
+                       .replace(/>/g, '&gt;');
+  }
+
+  function hexToRgb(hex) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) +
+                            h.charAt(1) + h.charAt(2) + h.charAt(2);
+    if (h.length !== 6) return [0, 0, 0];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16),
+            parseInt(h.slice(4, 6), 16)];
+  }
+
+  function rgba(hex, alpha) {
+    var c = hexToRgb(hex);
+    return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + alpha + ')';
+  }
+
+  function mixHex(a, b, t) {
+    var x = hexToRgb(a), y = hexToRgb(b), out = '#';
+    for (var i = 0; i < 3; i++) {
+      var v = Math.round(x[i] + (y[i] - x[i]) * t).toString(16);
+      out += v.length < 2 ? '0' + v : v;
+    }
+    return out;
+  }
+
+  /* Greedy wrap, matching Python's textwrap closely enough for label work. */
+  function wrapText(text, width) {
+    if (!(width > 0)) return [String(text)];
+    var words = String(text).split(/\s+/);
+    var lines = [], cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (!w) continue;
+      if (!cur) cur = w;
+      else if (cur.length + 1 + w.length <= width) cur += ' ' + w;
+      else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [''];
+  }
+
+  function fmtPct(v) {
+    return (v == null ? 0 : v).toFixed(state.decimals) + '%';
+  }
+
+  function fmtAbs(pct) {
+    if (!META.rootValue) return '';
+    var v = pct / 100 * META.rootValue;
+    var text = Math.abs(v) >= 1e-4 && Math.abs(v) < 1e6
+      ? v.toPrecision(4) : v.toExponential(3);
+    return text + (META.unit ? ' ' + META.unit : '');
+  }
+
+  /* ── theme ────────────────────────────────────────────────────────────── */
+  function activeTheme() {
+    if (state.theme !== 'auto') return state.theme;
+    return (window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+      ? 'dark' : 'light';
+  }
+
+  function themeInk() { return activeTheme() === 'dark' ? '#ffffff' : '#0b0b0b'; }
+  function themeSurface() { return activeTheme() === 'dark' ? '#1a1a19' : '#fcfcfb'; }
+  function themeBorder() {
+    return activeTheme() === 'dark' ? 'rgba(255,255,255,0.18)'
+                                    : 'rgba(11,11,11,0.15)';
+  }
+
+  function columnCount() { return (META.maxDepth || 1) + 1; }
+
+  function presetColors() {
+    var preset = PALETTES[state.palette] || PALETTES.categorical;
+    var base = (preset[activeTheme()] || preset.light).slice();
+    // Never cycle a palette: a column past the last slot folds into it.
+    while (base.length < columnCount()) base.push(base[base.length - 1]);
+    return base.slice(0, columnCount());
+  }
+
+  function depthColors() {
+    if (state.depthColors && state.depthColors.length >= columnCount()) {
+      return state.depthColors;
+    }
+    return presetColors();
+  }
+
+  function colorForDepth(depth) {
+    var colors = depthColors();
+    return colors[Math.min(Math.max(depth, 0), colors.length - 1)];
+  }
+
+  function nodeColor(label, depth) {
+    var over = state.nodeOverrides[label];
+    if (over && over.color) return over.color;
+    return colorForDepth(depth);
+  }
+
+  /* ── figure ───────────────────────────────────────────────────────────── */
+  function fullNameOf(label) {
+    var i = PAYLOAD.shorts.indexOf(label);
+    return i >= 0 ? PAYLOAD.names[i] : label;
+  }
+
+  function orderedNodes(v) {
+    var names = Object.keys(v.depthOf);
+    names.sort(function (a, b) {
+      var da = v.depthOf[a], db = v.depthOf[b];
+      if (da !== db) return da - db;
+      var wa = v.nodeTotals[a] || 0, wb = v.nodeTotals[b] || 0;
+      if (wa !== wb) return wb - wa;
+      return a < b ? -1 : 1;
+    });
+    return names;
+  }
+
+  /* Even columns reproduce the original layout; value-weighted stacks each
+     column by share so a column of forty hairlines no longer demands 1400px
+     of height.  A push-apart pass keeps the tiniest nodes from colliding. */
+  function positions(v, nodes, innerHeight, extents) {
+    if (state.placement === 'auto') return null;
+
+    var byDepth = {};
+    nodes.forEach(function (name) {
+      var d = v.depthOf[name];
+      (byDepth[d] || (byDepth[d] = [])).push(name);
+    });
+
+    var maxDepth = Math.max.apply(null, nodes.map(function (n) {
+      return v.depthOf[n];
+    })) || 1;
+
+    var xs = {}, ys = {};
+    Object.keys(byDepth).forEach(function (key) {
+      var column = byDepth[key];
+      var depth = Number(key);
+      var x = Math.min(Math.max(depth / maxDepth, 0.001), 0.999);
+
+      var raw;
+      if (state.placement === 'even') {
+        raw = column.map(function (_, i) { return (i + 0.5) / column.length; });
+      } else {
+        var total = column.reduce(function (sum, n) {
+          return sum + (v.nodeTotals[n] || 0);
+        }, 0) || 1;
+        var cum = 0;
+        raw = column.map(function (n) {
+          var w = v.nodeTotals[n] || 0;
+          var mid = (cum + w / 2) / total;
+          cum += w;
+          return mid;
+        });
+        // Push apart by however much room each label actually needs.  This used
+        // to be one gap for the whole column, sized for a single line — so a
+        // column of twenty wrapped ecoinvent names stacked them 24px apart with
+        // 32px of text in each, and the last column came out as a pile of
+        // overlapping labels.  Two neighbours need half of each of their own
+        // blocks between their centres, not a constant.
+        var span = Math.max(innerHeight, 1);
+        var room = column.map(function (n) {
+          return Math.max((extents && extents[n]) || 0, state.thickness);
+        });
+        // Clearance on top of the two half-blocks.  labelExtent counts line
+        // advances in ems, which lands a few px under the box the browser
+        // actually draws (the first line's ascent and the last one's descent
+        // sit outside the advance), so measured neighbours still touched at 6.
+        var CLEARANCE = 10;
+        var gaps = [];
+        var wanted = 0;
+        for (var i = 1; i < column.length; i++) {
+          var g = (room[i - 1] + room[i]) / 2 + CLEARANCE;
+          gaps.push(g);
+          wanted += g;
+        }
+        // A column that cannot hold its labels at full size gets them evenly
+        // squeezed rather than pushed off the bottom; the label cutoff and the
+        // wrap width are the real fixes and the status bar says so.
+        var squeeze = wanted > span * 0.98 ? (span * 0.98) / wanted : 1;
+        for (i = 1; i < raw.length; i++) {
+          var need = gaps[i - 1] * squeeze / span;
+          if (raw[i] < raw[i - 1] + need) raw[i] = raw[i - 1] + need;
+        }
+        var over = raw[raw.length - 1] - 1;
+        if (over > 0) {
+          for (var j = 0; j < raw.length; j++) raw[j] -= over;
+        }
+      }
+
+      column.forEach(function (name, i) {
+        xs[name] = x;
+        ys[name] = Math.min(Math.max(raw[i], 0.001), 0.999);
+        var saved = state.nodePos[name];
+        if (saved) { xs[name] = saved.x; ys[name] = saved.y; }
+      });
+    });
+
+    return { xs: xs, ys: ys };
+  }
+
+  /* Numbered mode: nodes wear "1", "2", … and the full names move to a key
+     below the diagram.  Long ecoinvent names never fit a figure column, and a
+     numbered reference list is what a paper wants anyway. */
+  var numberOf = {};
+
+  function labelFor(name, v) {
+    var over = state.nodeOverrides[name];
+    if (over && over.hidden) return '';
+    if (state.labelMode === 'none') return '';
+
+    var pct = v.nodeTotals[name] || 0;
+    // A label-only cutoff: the node and its flows still draw at full value.
+    if (state.labelCutoff > 0 && pct < state.labelCutoff) return '';
+    if (state.labelMode === 'number') return String(numberOf[name] || '');
+    if (state.labelMode === 'pct') return fmtPct(pct);
+
+    var text = (over && over.label != null) ? over.label
+             : (state.labelSource === 'full' ? fullNameOf(name) : name);
+    if (state.truncate > 0 && text.length > state.truncate) {
+      text = text.slice(0, Math.max(1, state.truncate - 1)) + '…';
+    }
+    var body = wrapText(text, state.wrap).map(esc).join('<br>');
+    return state.labelMode === 'both' ? body + '<br>' + fmtPct(pct) : body;
+  }
+
+  function linkColors(v) {
+    var values = v.flows.map(function (f) { return f.value; });
+    var lo = Math.min.apply(null, values.concat([0]));
+    var hi = Math.max.apply(null, values.concat([1]));
+
+    return v.flows.map(function (f) {
+      if (f.negative) return rgba(state.negativeColor, Math.min(1, state.linkAlpha + 0.2));
+      var hex;
+      switch (state.linkMode) {
+        case 'uniform':   hex = state.linkColor; break;
+        case 'source':    hex = nodeColor(f.source, v.depthOf[f.source]); break;
+        case 'target':    hex = nodeColor(f.target, v.depthOf[f.target]); break;
+        case 'magnitude':
+          var t = hi > lo ? (f.value - lo) / (hi - lo) : 0.5;
+          hex = mixHex('#cde2fb', '#0d366b', t);
+          break;
+        default:          hex = colorForDepth(f.depth - 1);
+      }
+      return rgba(hex, state.linkAlpha);
+    });
+  }
+
+  /* Vertical room a label block occupies once it is turned by labelAngle.
+     Un-rotated this is just the line stack, so a horizontal diagram sizes
+     exactly as it did before the orientation control existed; turned towards
+     the vertical the block's *width* is what starts eating the column, which
+     is why a rotated diagram needs a taller canvas rather than the same one. */
+  function labelExtent(label) {
+    var lines = label.split('<br>');
+    var longest = 0;
+    for (var i = 0; i < lines.length; i++) {
+      longest = Math.max(longest, lines[i].length);
+    }
+    var blockH = lines.length * state.labelSize * 1.3;
+    if (!state.labelAngle) return blockH;
+    // ~0.55 em per character is the usual average for a proportional face; the
+    // figure only has to be close enough to keep neighbours from touching.
+    var blockW = longest * state.labelSize * 0.55;
+    var rad = Math.abs(state.labelAngle) * Math.PI / 180;
+    return blockH * Math.cos(rad) + blockW * Math.sin(rad);
+  }
+
+  /* Horizontal room the outermost column's labels need once they are pushed
+     outside their nodes.  Plotly reserves nothing for label text — it lets the
+     names run off the edge of the figure — so forcing a side means widening
+     the margin to match.  Capped at 45% of the width: on a narrow window it is
+     better to clip a long name than to leave no room for the diagram. */
+  function labelRoom(v, nodes, labels) {
+    var edge = 0;
+    nodes.forEach(function (n) { edge = Math.max(edge, v.depthOf[n]); });
+    if (state.labelSide === 'left') edge = 0;
+
+    var widest = 0, tallest = 1;
+    nodes.forEach(function (name, i) {
+      if (v.depthOf[name] !== edge || !labels[i]) return;
+      var lines = labels[i].split('<br>');
+      tallest = Math.max(tallest, lines.length);
+      for (var j = 0; j < lines.length; j++) {
+        widest = Math.max(widest, lines[j].length);
+      }
+    });
+    if (!widest) return state.marginX;
+
+    // Turned labels lie down, so the room they need swaps between the axes —
+    // the same box the height estimate uses, read the other way round.
+    var rad = Math.abs(state.labelAngle || 0) * Math.PI / 180;
+    var blockW = widest * state.labelSize * 0.55;
+    var blockH = tallest * state.labelSize * 1.3;
+    var wide = blockW * Math.cos(rad) + blockH * Math.sin(rad);
+
+    var figureWidth = state.fitWidth ? (gd.clientWidth || state.width)
+                                     : state.width;
+    return Math.min(wide + state.thickness + 12,
+                    Math.max(80, figureWidth * 0.45));
+  }
+
+  /* Plotly's Sankey lays each column out itself and treats node.y as a hint —
+     ask for 41px between two nodes in a dense column and it will still draw
+     them 18px apart.  What it does honour is node.pad, the minimum gap it
+     leaves between node rectangles.  So the room a label needs has to be
+     expressed as pad, or a column of wrapped ecoinvent names collapses to the
+     default gap and the labels sit on top of each other no matter what
+     positions() asked for.
+
+     The Node gap control stays the floor; this only ever raises it, and only
+     as far as the tallest label actually on the diagram. */
+  function effectivePad(labels) {
+    var tallest = 0;
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i]) tallest = Math.max(tallest, labelExtent(labels[i]));
+    }
+    return Math.max(state.pad, Math.ceil(tallest) + 6);
+  }
+
+  function marginFor(v, nodes, labels) {
+    var margin = {
+      l: state.marginX, r: state.marginX,
+      t: state.marginTop, b: 36
+    };
+    if (state.labelSide === 'right') {
+      margin.r = Math.max(margin.r, labelRoom(v, nodes, labels));
+    } else if (state.labelSide === 'left') {
+      margin.l = Math.max(margin.l, labelRoom(v, nodes, labels));
+    }
+    return margin;
+  }
+
+  /* Size to the tallest column's actual label stack, not just its node count:
+     a two-line wrapped label needs twice the room of a one-line one, and
+     guessing on node count alone is what produced the old 6840px files that
+     still had labels touching. */
+  function autoHeight(v, nodes, labels, pad) {
+    var perColumn = {};
+    nodes.forEach(function (name, i) {
+      var d = v.depthOf[name];
+      var need = labels[i]
+        ? Math.max(labelExtent(labels[i]), state.thickness) + pad
+        // an unlabelled node only needs to be visible, not readable
+        : Math.min(pad, 6) + 2;
+      perColumn[d] = (perColumn[d] || 0) + need;
+    });
+    var tallest = Math.max.apply(null, Object.keys(perColumn).map(function (k) {
+      return perColumn[k];
+    }).concat([0]));
+    var needed = tallest + state.marginTop + 48;
+    return Math.max(480, Math.min(8000, Math.round(needed)));
+  }
+
+  function buildFigure(v) {
+    var nodes = orderedNodes(v);
+    var index = {};
+    nodes.forEach(function (n, i) { index[n] = i; });
+
+    var ink = state.labelColor || themeInk();
+    var surface = state.background || themeSurface();
+
+    numberOf = {};
+    nodes.forEach(function (n, i) { numberOf[n] = i + 1; });
+
+    // labels first: both the height and the node spacing depend on how many
+    // lines each one wraps to
+    var labels = nodes.map(function (n) { return labelFor(n, v); });
+    var extents = {};
+    nodes.forEach(function (n, i) {
+      extents[n] = labels[i] ? labelExtent(labels[i]) : 0;
+    });
+    var pad = effectivePad(labels);
+    var height = state.autoHeight ? autoHeight(v, nodes, labels, pad)
+                                  : state.height;
+    var pos = positions(v, nodes, height - state.marginTop - 36, extents);
+
+    var node = {
+      label: labels,
+      customdata: nodes.map(function (n) {
+        var pct = v.nodeTotals[n] || 0;
+        return [esc(fullNameOf(n)), fmtAbs(pct)];
+      }),
+      color: nodes.map(function (n) { return nodeColor(n, v.depthOf[n]); }),
+      pad: pad,
+      thickness: state.thickness,
+      align: state.align,
+      line: {
+        color: state.borderColor || themeBorder(),
+        width: state.borderWidth
+      },
+      hovertemplate: '<b>%{customdata[0]}</b><br>' +
+                     '%{value:.3g}% of total' +
+                     (META.rootValue ? '<br>%{customdata[1]}' : '') +
+                     '<extra></extra>'
+    };
+    if (pos) {
+      node.x = nodes.map(function (n) { return pos.xs[n]; });
+      node.y = nodes.map(function (n) { return pos.ys[n]; });
+    }
+
+    var link = {
+      source: v.flows.map(function (f) { return index[f.source]; }),
+      target: v.flows.map(function (f) { return index[f.target]; }),
+      value: v.flows.map(function (f) { return f.value; }),
+      color: linkColors(v),
+      customdata: v.flows.map(function (f) {
+        return [esc(fullNameOf(f.source)) + ' &#8594; ' + esc(fullNameOf(f.target)),
+                fmtAbs(f.value)];
+      }),
+      hovertemplate: '%{customdata[0]}<br><b>%{value:.3g}%</b>' +
+                     (META.rootValue ? '<br>%{customdata[1]}' : '') +
+                     '<extra></extra>'
+    };
+
+    var trace = {
+      type: 'sankey',
+      arrangement: state.arrangement,
+      textfont: { family: state.font, size: state.labelSize, color: ink },
+      node: node,
+      link: link
+    };
+
+    var layout = {
+      title: {
+        text: state.titleBold ? '<b>' + esc(state.title) + '</b>' : esc(state.title),
+        font: { family: state.font, size: state.titleSize, color: ink },
+        x: state.titleAlign === 'left' ? 0.01
+         : state.titleAlign === 'right' ? 0.99 : 0.5,
+        xanchor: state.titleAlign === 'center' ? 'center' : state.titleAlign
+      },
+      font: { family: state.font, size: state.fontSize, color: ink },
+      hoverlabel: { font: { family: state.font, size: state.hoverSize } },
+      paper_bgcolor: surface,
+      plot_bgcolor: surface,
+      margin: marginFor(v, nodes, labels),
+      height: height,
+      annotations: state.annotations.map(function (a) {
+        return {
+          text: a.text, x: a.x, y: a.y,
+          xref: 'paper', yref: 'paper',
+          showarrow: false,
+          // annotations carry their own angle — a label detached while the
+          // diagram was turned keeps the orientation it was detached at, and
+          // later moves of the Orientation slider leave it where it was put
+          textangle: a.angle || 0,
+          font: { family: state.font, size: a.size || state.labelSize,
+                  color: a.color || ink },
+          align: 'left',
+          bgcolor: a.bgcolor || 'rgba(0,0,0,0)',
+          captureevents: true
+        };
+      })
+    };
+    if (!state.fitWidth) layout.width = state.width;
+
+    var config = {
+      responsive: state.fitWidth,
+      // Granular rather than `editable: true`: the blanket flag also turns on
+      // title editing, which makes Plotly draw a "Click to enter Plot subtitle"
+      // placeholder under every title.  Annotations are what need to be
+      // draggable and retypable on the canvas; the title has a panel field.
+      edits: {
+        annotationPosition: true,
+        annotationTail: true,
+        annotationText: true
+      },
+      displaylogo: false,
+      scrollZoom: false,
+      // The modebar camera calls Plotly's own toImage, which rebuilds the
+      // figure from its spec and so cannot know about a label rotation that
+      // lives in the SVG.  Rather than let it hand out a silently un-rotated
+      // PNG, take it away while the labels are turned: the panel's Export
+      // buttons go through the rotation-aware path below.
+      modeBarButtonsToRemove: ['lasso2d', 'select2d', 'zoom2d', 'pan2d',
+                               'zoomIn2d', 'zoomOut2d', 'autoScale2d']
+                              .concat(labelsRestyled() ? ['toImage'] : []),
+      toImageButtonOptions: {
+        format: 'png',
+        filename: (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey',
+        scale: state.scale
+      }
+    };
+
+    return { data: [trace], layout: layout, config: config, nodes: nodes };
+  }
+
+  /* ── label orientation ────────────────────────────────────────────────── */
+  /* Plotly's Sankey has no label angle of its own.  It draws each label as a
+     <text x="0" y="0"> carrying a translate() to the point where the label
+     meets its node, so appending a rotate() to that transform turns the label
+     about exactly the right pivot: however far it swings it stays pinned to
+     its node.  Multi-line labels come through as tspans inside that same
+     <text>, so the whole stack turns together.
+
+     Plotly rewrites the transform on every draw — including node drags — so
+     this has to run again after each one. */
+  function angleTransform(base, angle) {
+    var clean = String(base || '').replace(/\s*rotate\([^)]*\)/g, '');
+    return angle ? (clean + ' rotate(' + angle + ')') : clean;
+  }
+
+  /* Which side of its node a label sits on is Plotly's decision, and it makes
+     it on x alone: past the middle of the figure the label flips inward. For a
+     contribution tree that is the wrong call — the deepest column is where the
+     long ecoinvent names are, and inward means straight over the diagram. So
+     the side is overridable, and buildFigure widens the margin to receive it. */
+  var TEXT_PAD = 3.25;                 // Plotly's own gap between node and text
+
+  function sideTransform(group, text) {
+    var side = state.labelSide;
+    if (side !== 'right' && side !== 'left') return null;
+    var rect = group.querySelector('rect.node-rect');
+    var w = rect ? parseFloat(rect.getAttribute('width')) : NaN;
+    if (!(w > 0)) w = state.thickness;
+    var m = /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/.exec(
+      text.getAttribute('transform') || '');
+    var y = m ? m[2] : '0';
+    text.setAttribute('text-anchor', side === 'right' ? 'start' : 'end');
+    // the tspans of a wrapped label are positioned relative to the anchor
+    var spans = text.querySelectorAll('tspan');
+    for (var i = 0; i < spans.length; i++) spans[i].setAttribute('x', '0');
+    return 'translate(' + (side === 'right' ? (w + TEXT_PAD) : -TEXT_PAD) +
+           ',' + y + ')';
+  }
+
+  /* Never restyle a half-drawn diagram.  Plotly removes the node groups of the
+     previous data set from an end-of-transition callback, and that transition
+     animates the very attribute we write — so touching `transform` while it is
+     running cancels it, the callback never fires, and the old nodes are left
+     stacked on top of the new ones.  Dropping the Levels slider from 4 to 3 on
+     a large tree left 215 stale labels piled over a 35-node diagram.
+
+     The node group count matching the figure we just built is the signal that
+     Plotly has finished; until it does, wait and look again. */
+  var styleRetry = null;
+
+  function applyLabelStyling() {
+    if (styleRetry) { clearTimeout(styleRetry); styleRetry = null; }
+    if (!labelsRestyled()) return;      // nothing to do, so touch nothing
+
+    var groups = gd.querySelectorAll('g.sankey-node');
+    var expected = lastFigure ? lastFigure.nodes.length : -1;
+    if (expected >= 0 && groups.length !== expected) {
+      styleRetry = setTimeout(applyLabelStyling, 60);
+      return;
+    }
+
+    var angle = state.labelAngle || 0;
+    for (var i = 0; i < groups.length; i++) {
+      var text = groups[i].querySelector('text.node-label');
+      if (!text) continue;
+      // side first: it rewrites the transform outright, which would drop a
+      // rotate() already sitting on it
+      var base = sideTransform(groups[i], text) ||
+                 text.getAttribute('transform');
+      text.setAttribute('transform', angleTransform(base, angle));
+    }
+  }
+
+  function labelsRestyled() {
+    return state.labelSide === 'right' || state.labelSide === 'left' ||
+           !!state.labelAngle;
+  }
+
+  /* The same two moves, applied to an exported SVG string.  Export cannot reuse
+     the live DOM: Plotly.toImage redraws the figure from its spec into a
+     throwaway div, which is a faithful copy of everything Plotly knows about
+     and nothing it doesn't.  Both export paths therefore patch the string. */
+  function restyleLabelsInSvg(svgText) {
+    var side = state.labelSide;
+    var angle = state.labelAngle || 0;
+    if (!labelsRestyled()) return svgText;
+    var flip = side === 'right' || side === 'left';
+    var x = side === 'right' ? (state.thickness + TEXT_PAD) : -TEXT_PAD;
+
+    return svgText.replace(/<text\b[^>]*>/g, function (tag) {
+      if (tag.indexOf('node-label') < 0) return tag;
+      var out = tag;
+      if (flip) {
+        out = out.replace(/text-anchor="[^"]*"/,
+                          'text-anchor="' + (side === 'right' ? 'start' : 'end') + '"');
+        out = out.replace(/\stransform="([^"]*)"/, function (all, tf) {
+          var m = /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/.exec(tf);
+          return ' transform="translate(' + x + ',' + (m ? m[2] : '0') + ')"';
+        });
+      }
+      if (angle) {
+        if (/\stransform="/.test(out)) {
+          out = out.replace(/\stransform="([^"]*)"/, function (all, tf) {
+            return ' transform="' + angleTransform(tf, angle) + '"';
+          });
+        } else {
+          out = out.replace(/<text\b/, '<text transform="rotate(' + angle + ')"');
+        }
+      }
+      return out;
+    });
+  }
+
+  /* ── render ───────────────────────────────────────────────────────────── */
+  var lastFigure = null;
+  var drawnSignature = null;
+
+  /* Re-attached after every full redraw, because newPlot purges the div's
+     listeners along with its old contents.  Miss this and node selection
+     silently stops working after the first data change. */
+  function bindPlotEvents() {
+    if (!gd.on) return;
+    gd.on('plotly_click', function (ev) {
+      var pt = ev && ev.points && ev.points[0];
+      if (!pt) return;
+      // Sankey node points carry link lists; link points carry source/target.
+      if (pt.sourceLinks === undefined && pt.targetLinks === undefined) return;
+      var nodes = lastFigure ? lastFigure.nodes : [];
+      var name = nodes[pt.index != null ? pt.index : pt.pointNumber];
+      if (name) {
+        selectNode(name);
+        $('group-node').open = true;
+      }
+    });
+    gd.on('plotly_relayout', syncFromRelayout);
+    gd.on('plotly_restyle', syncFromRestyle);
+    // catches the draws we do not drive ourselves — node drags, resizes
+    gd.on('plotly_afterplot', applyLabelStyling);
+  }
+
+  /* Plotly.react does not clear a Sankey's old node groups when the node set
+     changes under it: it removes them from an end-of-transition callback, and
+     a second react arriving before that callback runs strands them in the DOM
+     for good.  Dragging the Levels slider is exactly that — one render per
+     input event — and on a large tree it leaves hundreds of stale labels
+     piled over the real diagram, while the status bar honestly reports the
+     small number the pipeline produced.
+
+     react does not re-run the Sankey layout either: hand it new node.x /
+     node.y and it keeps the positions it worked out on the first draw, so
+     switching Placement appeared to do nothing at all until something else
+     happened to change the node count.
+
+     Only a full redraw fixes either one.  react is still what we want for
+     changes that touch nothing but paint, where it is worth keeping for the
+     hover and drag state it preserves — so the signature below covers the node
+     set and the geometry, and anything outside it stays on react. */
+  function figureSignature(figure) {
+    var node = figure.data[0].node;
+    var xy = '';
+    if (node.x && node.y) {
+      for (var i = 0; i < node.x.length; i++) {
+        xy += Math.round(node.x[i] * 1e4) + ',' + Math.round(node.y[i] * 1e4) + ';';
+      }
+    }
+    return figure.nodes.join('\u0001') + '|' + node.pad + '|' + xy;
+  }
+
+  function draw(figure) {
+    var signature = figureSignature(figure);
+    if (signature === drawnSignature) {
+      Plotly.react(gd, figure.data, figure.layout, figure.config);
+      return;
+    }
+    Plotly.newPlot(gd, figure.data, figure.layout, figure.config);
+    drawnSignature = signature;
+    bindPlotEvents();          // newPlot drops every listener on the div
+  }
+
+  function render() {
+    if (myGeneration !== generation) return;
+    view = LCAFlows.buildFlows(PAYLOAD, {
+      levels: state.levels,
+      smallMode: state.smallMode,
+      threshold: state.threshold,
+      maxNodes: state.maxNodes,
+      balance: state.balance
+    });
+
+    lastFigure = null;
+    if (!view.flows.length) {
+      gd.innerHTML = '<p style="padding:32px;color:#898781">Nothing to draw at ' +
+                     'these settings — raise the level count or lower the ' +
+                     'threshold.</p>';
+      // the div no longer holds a plot, so the next draw has to build one
+      drawnSignature = null;
+      updateStats();
+      refreshInspector();
+      buildKey();
+      save();
+      return;
+    }
+
+    lastFigure = buildFigure(view);
+    draw(lastFigure);
+    applyLabelStyling();
+    updateStats();
+    refreshInspector();
+    buildKey();
+    save();
+  }
+
+  function buildKey() {
+    var show = state.labelMode === 'number' && lastFigure;
+    $('node-key').hidden = !show;
+    if (!show) return;
+
+    var list = $('key-list');
+    list.innerHTML = '';
+    lastFigure.nodes.forEach(function (name) {
+      var over = state.nodeOverrides[name] || {};
+      var shown = over.label != null ? over.label : name;
+      var li = document.createElement('li');
+      li.value = numberOf[name];
+      var b = document.createElement('b');
+      b.textContent = shown;
+      var span = document.createElement('span');
+      span.className = 'pct';
+      span.textContent = '  ' + fmtPct(view.nodeTotals[name] || 0);
+      li.appendChild(b);
+      li.appendChild(span);
+      // the full ecoinvent name only when it says something the short one didn't
+      var full = fullNameOf(name);
+      if (full !== name) li.title = full;
+      list.appendChild(li);
+    });
+  }
+
+  function keyAsText() {
+    return ['no\tlabel\tpercent_of_total\tfull_name'].concat(
+      lastFigure.nodes.map(function (name) {
+        var over = state.nodeOverrides[name] || {};
+        return [numberOf[name],
+                over.label != null ? over.label : name,
+                (view.nodeTotals[name] || 0).toFixed(state.decimals),
+                fullNameOf(name)].join('\t');
+      })).join('\n');
+  }
+
+  function updateStats() {
+    var s = view.stats;
+    $('stat-flows').textContent = s.flows + ' flows';
+    $('stat-nodes').textContent = s.nodes + ' nodes';
+
+    var extra = [];
+    if (s.pooled) {
+      extra.push(s.pooled + ' ' + (state.smallMode === 'pool'
+        ? 'pooled into ' + s.otherNodes + ' "other"' : 'hidden'));
+    }
+    if (s.overCap) extra.push(s.overCap + ' below the node cap');
+    if (s.detached) extra.push(s.detached + ' detached from the root');
+    if (s.cyclesDropped) extra.push(s.cyclesDropped + ' cycle-forming dropped');
+    $('stat-extra').innerHTML = extra.length
+      ? '<span class="sep">|</span> ' + esc(extra.join(' · ')) : '';
+
+    var gapText = 'root balance: ' + s.gap.toFixed(1) + '% unaccounted';
+    if (state.balance) gapText += ' (drawn)';
+    $('stat-gap').innerHTML = s.nodes > 400
+      ? '<span class="warn">' + s.nodes + ' nodes — try a label cutoff, ' +
+        'or fewer levels</span> <span class="sep">|</span> ' + esc(gapText)
+      : esc(gapText);
+
+    $('balance-hint').textContent = s.gap > 0.05
+      ? 'Depth-1 children account for ' + (100 - s.gap).toFixed(1) +
+        '% of the root; ' + s.gap.toFixed(1) + '% is direct emissions or ' +
+        'unresolved.'
+      : 'Depth-1 children already account for the whole root.';
+  }
+
+  /* ── persistence ──────────────────────────────────────────────────────── */
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    } catch (err) {
+      $('save-note').textContent = 'Could not save to this browser.';
+    }
+  }
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      Object.keys(state).forEach(function (k) {
+        if (saved[k] !== undefined) state[k] = saved[k];
+      });
+    } catch (err) { /* corrupt or unavailable — fall back to defaults */ }
+  }
+
+  /* ── brand header ─────────────────────────────────────────────────────── */
+  /* The header's Light/Dark pair is a second face on the panel's Theme select
+     rather than its own setting, so the two can never disagree. */
+  function paintBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    var mode = activeTheme();
+    light.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+    dark.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+  }
+
+  function afterThemeChange() {
+    document.documentElement.setAttribute(
+      'data-theme', state.theme === 'auto' ? '' : state.theme);
+    state.depthColors = null;
+    state.labelColor = null;
+    state.background = null;
+    state.borderColor = null;
+    $('c-labelcolor').value = themeInk();
+    $('c-bg').value = themeSurface();
+    buildDepthColors();
+    paintBrandTheme();
+  }
+
+  function wireBrandHeader() {
+    var source = $('brand-source');
+    if (source) source.textContent = META.source || '';
+
+    // the builders leave src empty when the mark is missing from gui_assets
+    var logo = $('brand-logo');
+    if (logo && !logo.getAttribute('src')) logo.hidden = true;
+
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    function pick(mode) {
+      return function () {
+        state.theme = mode;
+        var sel = $('c-theme');
+        if (sel) sel.value = mode;
+        afterThemeChange();
+        render();
+      };
+    }
+    light.addEventListener('click', pick('light'));
+    dark.addEventListener('click', pick('dark'));
+    paintBrandTheme();
+  }
+
+  /* ── control binding ──────────────────────────────────────────────────── */
+  function setValueLabel(id, text) {
+    var el = $(id);
+    if (el) el.textContent = text;
+  }
+
+  // remembered so Reset / Load style can redraw the readouts properly rather
+  // than falling back to the raw number
+  var rangeFormat = {};
+
+  function bindRange(id, key, format, after) {
+    var el = $(id);
+    rangeFormat[id] = format;
+    el.value = state[key];
+    setValueLabel('v-' + id.slice(2), format(state[key]));
+    el.addEventListener('input', function () {
+      state[key] = parseFloat(el.value);
+      setValueLabel('v-' + id.slice(2), format(state[key]));
+      if (after) after();
+      render();
+    });
+  }
+
+  function bindSelect(id, key, after) {
+    var el = $(id);
+    el.value = state[key];
+    el.addEventListener('change', function () {
+      state[key] = el.value;
+      if (after) after();
+      render();
+    });
+  }
+
+  function bindCheck(id, key, after) {
+    var el = $(id);
+    el.checked = !!state[key];
+    el.addEventListener('change', function () {
+      state[key] = el.checked;
+      if (after) after();
+      render();
+    });
+  }
+
+  function bindColor(id, key, fallback) {
+    var el = $(id);
+    el.value = state[key] || fallback();
+    el.addEventListener('input', function () {
+      state[key] = el.value;
+      render();
+    });
+  }
+
+  function bindSeg(id, key, after) {
+    var wrapEl = $(id);
+    var buttons = wrapEl.querySelectorAll('button');
+    function paint() {
+      for (var i = 0; i < buttons.length; i++) {
+        var v = buttons[i].getAttribute('data-value');
+        var on = key === 'balance'
+          ? (v === 'on') === !!state[key] : state[key] === v;
+        buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+    }
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener('click', function () {
+        var v = this.getAttribute('data-value');
+        state[key] = key === 'balance' ? (v === 'on') : v;
+        paint();
+        if (after) after();
+        render();
+      });
+    }
+    paint();
+    return paint;
+  }
+
+  var repaintSeg = {};
+
+  function syncConditionalRows() {
+    $('row-threshold').className = 'row' +
+      (state.smallMode === 'all' ? ' disabled' : '');
+    $('row-linkcolor').className = 'row' +
+      (state.linkMode === 'uniform' ? '' : ' disabled');
+    $('row-height').className = 'row' + (state.autoHeight ? ' disabled' : '');
+    $('row-width').className = 'row' + (state.fitWidth ? ' disabled' : '');
+    $('levels-hint').textContent = 'Showing ' + state.levels + ' node columns ' +
+      '(depth 0–' + (state.levels - 1) + ') of 0–' + META.maxDepth + '.';
+  }
+
+  /* ── depth colour pickers ─────────────────────────────────────────────── */
+  function buildDepthColors() {
+    var host = $('depth-colors');
+    host.innerHTML = '';
+    var colors = depthColors();
+    var counts = {};
+    if (view) {
+      Object.keys(view.depthOf).forEach(function (n) {
+        counts[view.depthOf[n]] = (counts[view.depthOf[n]] || 0) + 1;
+      });
+    }
+
+    colors.forEach(function (hex, depth) {
+      var row = document.createElement('div');
+      row.className = 'depth-row';
+
+      var input = document.createElement('input');
+      input.type = 'color';
+      input.value = hex;
+      input.addEventListener('input', function () {
+        var next = depthColors().slice();
+        next[depth] = input.value;
+        state.depthColors = next;
+        render();
+      });
+
+      var name = document.createElement('span');
+      name.className = 'swatch-label';
+      name.textContent = depth === 0 ? 'Depth 0 (root)' : 'Depth ' + depth;
+
+      var count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = counts[depth] ? counts[depth] + ' nodes' : '—';
+
+      row.appendChild(input);
+      row.appendChild(name);
+      row.appendChild(count);
+      host.appendChild(row);
+    });
+
+    var preset = PALETTES[state.palette] || PALETTES.categorical;
+    var slots = (preset[activeTheme()] || preset.light).length;
+    var note = [];
+    if (state.palette === 'legacy') {
+      note.push('The original palette fails the colourblind-safety and ' +
+                'lightness checks — kept only to reproduce older figures.');
+    }
+    if (slots < columnCount()) {
+      note.push('This palette has ' + slots + ' steps for ' + columnCount() +
+                ' columns; the deepest columns reuse the last step.');
+    }
+    $('palette-hint').textContent = note.join(' ');
+  }
+
+  /* ── node inspector ───────────────────────────────────────────────────── */
+  function selectNode(label) {
+    selected = label;
+    refreshInspector();
+  }
+
+  function refreshInspector() {
+    var has = selected && view && (selected in view.depthOf);
+    $('inspector').hidden = !has;
+    $('inspector-empty').hidden = !!has;
+    if (!has) return;
+
+    var over = state.nodeOverrides[selected] || {};
+    var pct = view.nodeTotals[selected] || 0;
+    $('i-full').textContent = fullNameOf(selected);
+    $('i-stat').innerHTML = 'Depth <b>' + view.depthOf[selected] + '</b> · ' +
+      '<b>' + fmtPct(pct) + '</b> of total' +
+      (META.rootValue ? ' · <b>' + esc(fmtAbs(pct)) + '</b>' : '');
+    $('i-label').value = over.label != null ? over.label : selected;
+    $('i-color').value = nodeColor(selected, view.depthOf[selected]);
+    $('i-hide').checked = !!over.hidden;
+  }
+
+  function editSelected(patch) {
+    if (!selected) return;
+    var over = state.nodeOverrides[selected] || {};
+    Object.keys(patch).forEach(function (k) { over[k] = patch[k]; });
+    state.nodeOverrides[selected] = over;
+    render();
+  }
+
+  /* ── annotations ──────────────────────────────────────────────────────── */
+  /* Plotly renders each Sankey node as a <g> with the D3 datum still bound, so
+     we can read the drawn rectangle and convert it to paper coordinates — which
+     is what lets a detached label start exactly where its node is. */
+  function nodePaperPos(label) {
+    try {
+      var fl = gd._fullLayout;
+      var box = gd.getBoundingClientRect();
+      var scale = fl.width / box.width;
+      var groups = gd.querySelectorAll('g.sankey-node');
+      for (var i = 0; i < groups.length; i++) {
+        var datum = groups[i].__data__;
+        var node = datum && (datum.node || datum);
+        if (!node || node.label == null) continue;
+        if (node.label !== labelFor(label, view)) continue;
+        var r = groups[i].getBoundingClientRect();
+        var cx = (r.left + r.width / 2 - box.left) * scale;
+        var cy = (r.top + r.height / 2 - box.top) * scale;
+        var innerW = fl.width - fl.margin.l - fl.margin.r;
+        var innerH = fl.height - fl.margin.t - fl.margin.b;
+        return {
+          x: Math.min(1, Math.max(0, (cx - fl.margin.l) / innerW)),
+          y: Math.min(1, Math.max(0, 1 - (cy - fl.margin.t) / innerH))
+        };
+      }
+    } catch (err) { /* fall through to the centre */ }
+    return { x: 0.5, y: 0.5 };
+  }
+
+  function addAnnotation(text, pos, size, angle) {
+    state.annotations.push({
+      text: text,
+      x: pos.x, y: pos.y,
+      size: size || state.labelSize + 1,
+      angle: angle || 0,
+      color: state.labelColor || themeInk()
+    });
+    render();
+  }
+
+  /* Plotly's editable mode writes drags and in-place retypes straight into the
+     layout, then tells us about it — mirror those back into state so they
+     survive the next render. */
+  function syncFromRelayout(ev) {
+    if (suspendSync) return;
+    var touched = false;
+    Object.keys(ev).forEach(function (key) {
+      var m = /^annotations\[(\d+)\]\.(x|y|text)$/.exec(key);
+      if (m && state.annotations[+m[1]]) {
+        state.annotations[+m[1]][m[2]] = ev[key];
+        touched = true;
+        return;
+      }
+      if (key === 'title.text' || key === 'title') {
+        var text = typeof ev[key] === 'string' ? ev[key] : (ev[key] || {}).text;
+        if (typeof text === 'string') {
+          state.title = text.replace(/<\/?b>/g, '');
+          $('c-title').value = state.title;
+          touched = true;
+        }
+      }
+    });
+    if (touched) save();
+  }
+
+  function syncFromRestyle() {
+    if (suspendSync || !lastFigure) return;
+    try {
+      var node = gd.data[0].node;
+      if (!node || !node.x || !node.y) return;
+      lastFigure.nodes.forEach(function (name, i) {
+        if (node.x[i] != null && node.y[i] != null) {
+          state.nodePos[name] = { x: node.x[i], y: node.y[i] };
+        }
+      });
+      save();
+    } catch (err) { /* nothing to capture */ }
+  }
+
+  /* ── export ───────────────────────────────────────────────────────────── */
+  function download(name, text, mime) {
+    var blob = new Blob([text], { type: mime || 'application/octet-stream' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function baseName() {
+    return (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey';
+  }
+
+  /* Rasterise an SVG string the way Plotly's own PNG path does — through an
+     <img> and a canvas.  The source is a data: URI rather than a blob: one so
+     the canvas stays untainted on file:// as well as over http. */
+  function rasterize(svgText, width, height, scale, done, fail) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.drawImage(img, 0, 0, width, height);
+        if (canvas.toBlob) canvas.toBlob(done, 'image/png');
+        else done(canvas.toDataURL('image/png'));
+      } catch (err) { fail(); }
+    };
+    img.onerror = fail;
+    img.src = 'data:image/svg+xml,' + encodeURIComponent(svgText);
+  }
+
+  function exportImage(format) {
+    var width = gd._fullLayout.width;
+    var height = gd._fullLayout.height;
+    var scale = format === 'svg' ? 1 : state.scale;
+
+    function plotlyDownload() {
+      Plotly.downloadImage(gd, {
+        format: format, filename: baseName(),
+        scale: scale, width: width, height: height
+      });
+    }
+
+    // Nothing to patch when the labels are level — keep Plotly's own path.
+    if (!labelsRestyled()) return plotlyDownload();
+
+    function giveUp() {
+      $('save-note').textContent =
+        'Could not export the rotated labels — saved the level version instead.';
+      plotlyDownload();
+    }
+
+    Plotly.toImage(gd, { format: 'svg', width: width, height: height })
+      .then(function (uri) {
+        var svg = restyleLabelsInSvg(
+          decodeURIComponent(uri.replace(/^data:image\/svg\+xml,/, '')));
+        if (format === 'svg') {
+          download(baseName() + '.svg', svg, 'image/svg+xml');
+          return;
+        }
+        rasterize(svg, width, height, scale, function (out) {
+          if (out && out.type) {                       // a Blob from toBlob
+            var url = URL.createObjectURL(out);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = baseName() + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          } else if (out) {                            // a data URI fallback
+            var link = document.createElement('a');
+            link.href = out;
+            link.download = baseName() + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } else {
+            giveUp();
+          }
+        }, giveUp);
+      }, giveUp);
+  }
+
+  function exportCsv() {
+    var rows = [['source', 'target', 'depth', 'percent_of_total', 'absolute',
+                 'unit', 'negative', 'synthetic']];
+    view.flows.forEach(function (f) {
+      rows.push([f.source, f.target, f.depth, f.value,
+                 META.rootValue ? f.value / 100 * META.rootValue : '',
+                 META.unit || '', f.negative ? 'yes' : 'no', f.synthetic || '']);
+    });
+    var csv = rows.map(function (r) {
+      return r.map(function (cell) {
+        var s = String(cell);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(',');
+    }).join('\n');
+    download(baseName() + '-flows.csv', csv, 'text/csv');
+  }
+
+  /* ── dump hook (verification) ─────────────────────────────────────────── */
+  /* Produces the same JSON shape as tools/verify_flows.py so the two flow
+     pipelines can be diffed.  See README_sankey.md. */
+  window.dumpFlows = function (levels, threshold, smallMode, balance, prune) {
+    var v = LCAFlows.buildFlows(PAYLOAD, {
+      levels: levels,
+      threshold: threshold,
+      smallMode: smallMode || 'pool',
+      balance: balance === undefined ? true : balance,
+      // off by default here: the reference pipeline never pruned, so leaving it
+      // on would make the regression diff test two things at once
+      prune: prune === true
+    });
+    var flows = v.flows.map(function (f) {
+      return { source: f.source, target: f.target, depth: f.depth,
+               value: Math.round(f.value * 1e9) / 1e9 };
+    }).sort(function (a, b) {
+      if (a.source !== b.source) return a.source < b.source ? -1 : 1;
+      if (a.target !== b.target) return a.target < b.target ? -1 : 1;
+      return a.depth - b.depth;
+    });
+    var depthOf = {};
+    Object.keys(v.depthOf).sort().forEach(function (k) { depthOf[k] = v.depthOf[k]; });
+    return {
+      settings: { levels: levels, threshold: threshold },
+      stats: { pooled: v.stats.pooled, otherNodes: v.stats.otherNodes,
+               gap: v.stats.gap, cyclesDropped: v.stats.cyclesDropped,
+               flows: v.stats.flows, nodes: v.stats.nodes },
+      flows: flows,
+      depthOf: depthOf
+    };
+  };
+
+  /* ── wiring ───────────────────────────────────────────────────────────── */
+  function wire() {
+    var maxLevels = (META.maxDepth || 1) + 1;
+    $('c-levels').max = maxLevels;
+    if (state.levels > maxLevels) state.levels = maxLevels;
+    $('meta-source').textContent = META.source || '';
+
+    // palette dropdown
+    var sel = $('c-palette');
+    Object.keys(PALETTES).forEach(function (key) {
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = PALETTES[key].label;
+      sel.appendChild(opt);
+    });
+
+    // data
+    bindRange('c-levels', 'levels', function (v) { return String(v); },
+              syncConditionalRows);
+    repaintSeg.small = bindSeg('c-small', 'smallMode', syncConditionalRows);
+    bindRange('c-threshold', 'threshold', function (v) { return v.toFixed(1) + '%'; });
+    bindRange('c-maxnodes', 'maxNodes', function (v) { return v ? String(v) : 'all'; });
+    repaintSeg.balance = bindSeg('c-balance', 'balance');
+
+    // typography
+    bindSelect('c-font', 'font');
+    bindRange('c-fontsize', 'fontSize', function (v) { return v + 'px'; });
+    bindRange('c-labelsize', 'labelSize', function (v) { return v + 'px'; });
+    bindColor('c-labelcolor', 'labelColor', themeInk);
+    $('c-labelcolor-auto').addEventListener('click', function () {
+      state.labelColor = null;
+      $('c-labelcolor').value = themeInk();
+      render();
+    });
+    bindRange('c-hoversize', 'hoverSize', function (v) { return v + 'px'; });
+    $('c-title').value = state.title;
+    $('c-title').addEventListener('input', function () {
+      state.title = this.value;
+      render();
+    });
+    bindRange('c-titlesize', 'titleSize', function (v) { return v + 'px'; });
+    bindSelect('c-titlealign', 'titleAlign');
+    bindCheck('c-titlebold', 'titleBold');
+
+    // labels
+    repaintSeg.labelMode = bindSeg('c-labelmode', 'labelMode');
+    bindSelect('c-labelsource', 'labelSource');
+    bindRange('c-wrap', 'wrap', function (v) { return String(v); });
+    bindRange('c-truncate', 'truncate', function (v) {
+      return v ? String(v) : 'off';
+    });
+    bindRange('c-labelcutoff', 'labelCutoff', function (v) {
+      return v ? v.toFixed(1) + '%' : 'all';
+    });
+    bindSelect('c-align', 'align');
+    bindSelect('c-labelside', 'labelSide');
+    bindRange('c-labelangle', 'labelAngle', function (v) {
+      return (v > 0 ? '+' : '') + v + '°';
+    });
+    bindRange('c-decimals', 'decimals', function (v) { return String(v); });
+    $('c-addtext').addEventListener('click', function () {
+      // No prompt(): modal dialogs are blocked in sandboxed contexts, and the
+      // annotation is editable on the canvas anyway, which is the better flow.
+      addAnnotation('Double-click to edit',
+                    { x: 0.5, y: 0.5 - 0.03 * state.annotations.length });
+    });
+    $('c-clearann').addEventListener('click', function () {
+      state.annotations = [];
+      render();
+    });
+
+    // colours
+    bindSelect('c-theme', 'theme', afterThemeChange);
+    bindSelect('c-palette', 'palette', function () {
+      state.depthColors = null;
+      buildDepthColors();
+    });
+    bindSelect('c-linkmode', 'linkMode', syncConditionalRows);
+    bindColor('c-linkcolor', 'linkColor', function () { return '#2a78d6'; });
+    bindRange('c-linkalpha', 'linkAlpha', function (v) { return v.toFixed(2); });
+    bindColor('c-negcolor', 'negativeColor', function () {
+      return INITIAL.negativeColor;
+    });
+    bindColor('c-bordercolor', 'borderColor', function () { return '#000000'; });
+    bindRange('c-borderwidth', 'borderWidth', function (v) { return v.toFixed(1); });
+    bindColor('c-bg', 'background', themeSurface);
+    $('c-bg-auto').addEventListener('click', function () {
+      state.background = null;
+      $('c-bg').value = themeSurface();
+      render();
+    });
+
+    // layout
+    bindSelect('c-placement', 'placement');
+    bindSelect('c-arrangement', 'arrangement');
+    bindRange('c-pad', 'pad', function (v) { return String(v); });
+    bindRange('c-thickness', 'thickness', function (v) { return String(v); });
+    bindCheck('c-autoheight', 'autoHeight', syncConditionalRows);
+    bindRange('c-height', 'height', function (v) { return v + 'px'; });
+    bindCheck('c-fitwidth', 'fitWidth', syncConditionalRows);
+    bindRange('c-width', 'width', function (v) { return v + 'px'; });
+    bindRange('c-marginx', 'marginX', function (v) { return String(v); });
+    bindRange('c-margintop', 'marginTop', function (v) { return String(v); });
+    $('c-resetpos').addEventListener('click', function () {
+      state.nodePos = {};
+      render();
+    });
+
+    // inspector
+    $('i-label').addEventListener('input', function () {
+      editSelected({ label: this.value });
+    });
+    $('i-color').addEventListener('input', function () {
+      editSelected({ color: this.value });
+    });
+    $('i-color-reset').addEventListener('click', function () {
+      editSelected({ color: null });
+    });
+    $('i-hide').addEventListener('change', function () {
+      editSelected({ hidden: this.checked });
+    });
+    $('i-detach').addEventListener('click', function () {
+      if (!selected) return;
+      var text = labelFor(selected, view) || selected;
+      var pos = nodePaperPos(selected);
+      editSelected({ hidden: true });
+      addAnnotation(text, pos, null, state.labelAngle);
+    });
+    $('i-reset').addEventListener('click', function () {
+      if (!selected) return;
+      delete state.nodeOverrides[selected];
+      delete state.nodePos[selected];
+      render();
+    });
+
+    // export
+    bindRange('c-scale', 'scale', function (v) { return v + '×'; });
+    $('c-png').addEventListener('click', function () { exportImage('png'); });
+    $('c-svg').addEventListener('click', function () { exportImage('svg'); });
+    $('c-csv').addEventListener('click', exportCsv);
+    $('c-save').addEventListener('click', function () {
+      download(baseName() + '-style.json', JSON.stringify(state, null, 2),
+               'application/json');
+    });
+    $('c-load').addEventListener('click', function () { $('c-loadfile').click(); });
+    $('c-loadfile').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var saved = JSON.parse(reader.result);
+          Object.keys(state).forEach(function (k) {
+            if (saved[k] !== undefined) state[k] = saved[k];
+          });
+          applyStateToControls();
+          render();
+          $('save-note').textContent = 'Loaded ' + file.name + '.';
+        } catch (err) {
+          $('save-note').textContent = file.name + ' is not a saved style.';
+        }
+      };
+      reader.readAsText(file);
+      this.value = '';
+    });
+    $('c-copykey').addEventListener('click', function () {
+      var text = keyAsText();
+      var btn = this;
+      var done = function () {
+        btn.textContent = 'Copied';
+        setTimeout(function () { btn.textContent = 'Copy as table'; }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {
+          download(baseName() + '-key.tsv', text, 'text/tab-separated-values');
+        });
+      } else {
+        download(baseName() + '-key.tsv', text, 'text/tab-separated-values');
+      }
+    });
+    $('c-publication').addEventListener('click', function () {
+      state.theme = 'light';
+      state.palette = 'print';
+      state.depthColors = null;
+      state.background = '#ffffff';
+      state.labelColor = '#000000';
+      state.borderColor = '#000000';
+      state.borderWidth = 0.5;
+      state.labelMode = 'number';
+      state.font = 'Arial, Helvetica, sans-serif';
+      state.linkAlpha = 0.45;
+      state.titleBold = false;
+      applyStateToControls();
+      render();
+    });
+    $('c-reset').addEventListener('click', function () {
+      if (!window.confirm('Reset every control to its default?')) return;
+      try { localStorage.removeItem(STORE_KEY); } catch (err) { /* ignore */ }
+      state = defaults();
+      applyStateToControls();
+      render();
+    });
+
+    wireBrandHeader();
+
+    // panel visibility
+    $('c-hidepanel').addEventListener('click', function () {
+      document.body.classList.add('panel-hidden');
+      setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
+    });
+    $('panel-toggle').addEventListener('click', function () {
+      document.body.classList.remove('panel-hidden');
+      setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
+    });
+  }
+
+  /* Push the whole state back into the DOM — used after Reset and after
+     loading a saved style, where every control may have changed at once. */
+  function applyStateToControls() {
+    suspendSync = true;
+    var pairs = [
+      ['c-levels', 'levels'], ['c-threshold', 'threshold'],
+      ['c-maxnodes', 'maxNodes'],
+      ['c-fontsize', 'fontSize'], ['c-labelsize', 'labelSize'],
+      ['c-hoversize', 'hoverSize'], ['c-titlesize', 'titleSize'],
+      ['c-wrap', 'wrap'], ['c-truncate', 'truncate'], ['c-decimals', 'decimals'],
+      ['c-labelcutoff', 'labelCutoff'], ['c-labelangle', 'labelAngle'],
+      ['c-linkalpha', 'linkAlpha'], ['c-borderwidth', 'borderWidth'],
+      ['c-pad', 'pad'], ['c-thickness', 'thickness'], ['c-height', 'height'],
+      ['c-width', 'width'], ['c-marginx', 'marginX'],
+      ['c-margintop', 'marginTop'], ['c-scale', 'scale'],
+      ['c-font', 'font'], ['c-titlealign', 'titleAlign'],
+      ['c-labelsource', 'labelSource'], ['c-align', 'align'],
+      ['c-labelside', 'labelSide'],
+      ['c-theme', 'theme'], ['c-palette', 'palette'],
+      ['c-linkmode', 'linkMode'], ['c-placement', 'placement'],
+      ['c-arrangement', 'arrangement']
+    ];
+    pairs.forEach(function (p) {
+      var el = $(p[0]);
+      if (!el) return;
+      el.value = state[p[1]];
+      var valId = 'v-' + p[0].slice(2);
+      if ($(valId) && rangeFormat[p[0]]) {
+        $(valId).textContent = rangeFormat[p[0]](state[p[1]]);
+      }
+    });
+    $('c-title').value = state.title;
+    $('c-titlebold').checked = !!state.titleBold;
+    $('c-autoheight').checked = !!state.autoHeight;
+    $('c-fitwidth').checked = !!state.fitWidth;
+    $('c-labelcolor').value = state.labelColor || themeInk();
+    $('c-bg').value = state.background || themeSurface();
+    $('c-linkcolor').value = state.linkColor;
+    $('c-negcolor').value = state.negativeColor;
+    $('c-bordercolor').value = state.borderColor || '#000000';
+    document.documentElement.setAttribute(
+      'data-theme', state.theme === 'auto' ? '' : state.theme);
+    Object.keys(repaintSeg).forEach(function (k) { repaintSeg[k](); });
+    syncConditionalRows();
+    buildDepthColors();
+    paintBrandTheme();
+    suspendSync = false;
+  }
+
+  /* ── init ─────────────────────────────────────────────────────────────── */
+  load();
+  wire();
+  applyStateToControls();
+  render();                    // draw() binds the plot events on the first plot
+  buildDepthColors();
+
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onScheme = function () { if (state.theme === 'auto') render(); };
+    if (mq.addEventListener) mq.addEventListener('change', onScheme);
+    else if (mq.addListener) mq.addListener(onScheme);
+  }
+
+  if (typeof global.__lcaOnStarted === 'function') global.__lcaOnStarted();
+
+  if (/[?&]dumpFlows=1/.test(location.search)) {
+    var qs = function (name, fallback) {
+      var m = new RegExp('[?&]' + name + '=([^&]+)').exec(location.search);
+      return m ? parseFloat(m[1]) : fallback;
+    };
+    var mode = (/[?&]smallMode=(\w+)/.exec(location.search) || [])[1];
+    var bal = /[?&]balance=1/.test(location.search) ? true
+            : /[?&]balance=0/.test(location.search) ? false : undefined;
+    var dump = JSON.stringify(
+      window.dumpFlows(qs('levels', state.levels), qs('threshold', state.threshold),
+                       mode, bal),
+      null, 2);
+    /* eslint-disable no-console */
+    console.log(dump);
+    // also into the DOM, so `chrome --headless --dump-dom` can read it back
+    $('flow-dump').textContent = dump;
+  }
+  }
+
+  global.LCADashboard = { start: start };
+
+  /* A per-workbook build inlines its data as globals and starts straight away;
+     the drop-in app leaves PAYLOAD null and calls start() itself. */
+  if (typeof PAYLOAD !== 'undefined' && PAYLOAD && PAYLOAD.names) {
+    start(PAYLOAD, INITIAL, PALETTES);
+  }
+}(this));
+</script>
+<!-- empty in a per-workbook build, which already has its data -->
+<script type="text/javascript">/*
+ * xlsx.js — a small read-only .xlsx reader with no dependencies.
+ *
+ * An .xlsx is a ZIP of XML, and the browser can now do both halves on its own:
+ * DecompressionStream('deflate-raw') for the archive entries, DOMParser for the
+ * XML.  Shipping ~900 KB of a general-purpose spreadsheet library to read four
+ * known files, in a page that already carries Plotly, is not a good trade.
+ *
+ * Deliberately partial.  It reads cell *values* — text and numbers — and
+ * nothing else: no styles, no formulas beyond their cached result, no dates as
+ * Date objects, no .xls (that is a completely different, pre-ZIP format).  A
+ * contribution-tree export needs process names and one numeric column, and
+ * anything past that is weight we would carry for nothing.
+ *
+ *   LCAXlsx.read(arrayBuffer) -> Promise<{ sheets: [{ name, rows }] }>
+ *
+ * `rows` is a dense 2-D array indexed from row 1 / column A, holding strings,
+ * numbers or null — the same rectangle pandas hands back for
+ * `read_excel(header=None)`, so the parser above it can be a direct port.
+ */
+(function (global) {
+  'use strict';
+
+  /* ── ZIP ──────────────────────────────────────────────────────────────── */
+  /* Just enough of the format to find named entries and inflate them: the
+     central directory at the tail, then each local header for the real data
+     offset.  ZIP64 and encryption are not handled; neither appears in a
+     spreadsheet export of this size, and both are reported rather than
+     silently mis-read. */
+  function findEndOfCentralDirectory(view) {
+    // the EOCD is last, but a trailing comment can push it up to 64 KB back
+    var min = Math.max(0, view.byteLength - 65557);
+    for (var i = view.byteLength - 22; i >= min; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) return i;
+    }
+    return -1;
+  }
+
+  function readEntries(buffer) {
+    var view = new DataView(buffer);
+    var eocd = findEndOfCentralDirectory(view);
+    if (eocd < 0) throw new Error('not a zip archive (no end-of-central-directory)');
+
+    var count = view.getUint16(eocd + 10, true);
+    var start = view.getUint32(eocd + 16, true);
+    if (count === 0xffff || start === 0xffffffff) {
+      throw new Error('ZIP64 archives are not supported');
+    }
+
+    var decoder = new TextDecoder('utf-8');
+    var entries = {};
+    var p = start;
+    for (var i = 0; i < count; i++) {
+      if (view.getUint32(p, true) !== 0x02014b50) break;
+      var flags = view.getUint16(p + 8, true);
+      var method = view.getUint16(p + 10, true);
+      var compressed = view.getUint32(p + 20, true);
+      var nameLen = view.getUint16(p + 28, true);
+      var extraLen = view.getUint16(p + 30, true);
+      var commentLen = view.getUint16(p + 32, true);
+      var localOffset = view.getUint32(p + 42, true);
+      var name = decoder.decode(new Uint8Array(buffer, p + 46, nameLen));
+      entries[name] = { method: method, compressed: compressed,
+                        localOffset: localOffset, flags: flags };
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return { view: view, buffer: buffer, entries: entries };
+  }
+
+  function entryBytes(zip, name) {
+    var entry = zip.entries[name];
+    if (!entry) return null;
+    if (entry.flags & 0x1) throw new Error('encrypted entry: ' + name);
+
+    // the central directory's name/extra lengths need not match the local
+    // header's, so the data offset has to come from the local header
+    var view = zip.view;
+    var at = entry.localOffset;
+    if (view.getUint32(at, true) !== 0x04034b50) {
+      throw new Error('bad local header for ' + name);
+    }
+    var nameLen = view.getUint16(at + 26, true);
+    var extraLen = view.getUint16(at + 28, true);
+    var from = at + 30 + nameLen + extraLen;
+    return { method: entry.method,
+             bytes: new Uint8Array(zip.buffer, from, entry.compressed) };
+  }
+
+  function inflate(part) {
+    if (!part) return Promise.resolve(null);
+    if (part.method === 0) {                       // stored
+      return Promise.resolve(new TextDecoder('utf-8').decode(part.bytes));
+    }
+    if (part.method !== 8) {
+      return Promise.reject(new Error('unsupported compression method ' +
+                                      part.method));
+    }
+    var stream = new Blob([part.bytes]).stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(stream).text();
+  }
+
+  function readText(zip, name) {
+    try {
+      return inflate(entryBytes(zip, name));
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  /* ── XML ──────────────────────────────────────────────────────────────── */
+  function parseXml(text, what) {
+    var doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) {
+      throw new Error('could not parse ' + what);
+    }
+    return doc;
+  }
+
+  /* Local name, so the code does not care whether the file namespaces its
+     elements — some producers do, some do not. */
+  function tags(node, name) {
+    var all = node.getElementsByTagName('*');
+    var out = [];
+    for (var i = 0; i < all.length; i++) {
+      var tag = all[i].tagName;
+      if (tag === name || tag.slice(tag.indexOf(':') + 1) === name) out.push(all[i]);
+    }
+    return out;
+  }
+
+  function attr(node, name) {
+    if (node.hasAttribute(name)) return node.getAttribute(name);
+    for (var i = 0; i < node.attributes.length; i++) {
+      var a = node.attributes[i];
+      var local = a.name.slice(a.name.indexOf(':') + 1);
+      if (local === name) return a.value;
+    }
+    return null;
+  }
+
+  /* "BC12" -> 54.  Excel's column letters are bijective base-26. */
+  function columnIndex(ref) {
+    var n = 0;
+    for (var i = 0; i < ref.length; i++) {
+      var c = ref.charCodeAt(i);
+      if (c < 65 || c > 90) break;
+      n = n * 26 + (c - 64);
+    }
+    return n - 1;
+  }
+
+  function rowIndex(ref) {
+    var m = /(\d+)/.exec(ref);
+    return m ? parseInt(m[1], 10) - 1 : -1;
+  }
+
+  /* A shared string is a run of <t> fragments; formatting splits one sentence
+     across several, so they have to be joined rather than taking the first. */
+  function sharedStrings(doc) {
+    if (!doc) return [];
+    return tags(doc.documentElement, 'si').map(function (si) {
+      return tags(si, 't').map(function (t) { return t.textContent; }).join('');
+    });
+  }
+
+  function sheetRows(doc, strings) {
+    var rows = [];
+    var cells = tags(doc.documentElement, 'c');
+    var maxRow = -1, maxCol = -1;
+    var found = [];
+
+    for (var i = 0; i < cells.length; i++) {
+      var cell = cells[i];
+      var ref = attr(cell, 'r') || '';
+      var r = rowIndex(ref), c = columnIndex(ref);
+      if (r < 0 || c < 0) continue;
+
+      var type = attr(cell, 't') || 'n';
+      var value = null;
+      if (type === 'inlineStr') {
+        value = tags(cell, 't').map(function (t) { return t.textContent; }).join('');
+      } else {
+        var v = tags(cell, 'v')[0];
+        var raw = v ? v.textContent : null;
+        if (raw === null || raw === '') {
+          value = null;
+        } else if (type === 's') {
+          value = strings[parseInt(raw, 10)];
+          if (value === undefined) value = null;
+        } else if (type === 'str' || type === 'e') {
+          value = raw;                       // formula result / error text
+        } else if (type === 'b') {
+          value = raw === '1';
+        } else {
+          var num = parseFloat(raw);
+          value = isNaN(num) ? raw : num;    // 'n' and anything unrecognised
+        }
+      }
+      if (value === '') value = null;
+      found.push([r, c, value]);
+      if (r > maxRow) maxRow = r;
+      if (c > maxCol) maxCol = c;
+    }
+
+    for (var y = 0; y <= maxRow; y++) {
+      var row = new Array(maxCol + 1);
+      for (var x = 0; x <= maxCol; x++) row[x] = null;
+      rows.push(row);
+    }
+    for (i = 0; i < found.length; i++) {
+      rows[found[i][0]][found[i][1]] = found[i][2];
+    }
+    return rows;
+  }
+
+  /* ── entry point ──────────────────────────────────────────────────────── */
+  function read(buffer) {
+    var zip;
+    try {
+      zip = readEntries(buffer);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+
+    return Promise.all([
+      readText(zip, 'xl/workbook.xml'),
+      readText(zip, 'xl/_rels/workbook.xml.rels'),
+      readText(zip, 'xl/sharedStrings.xml')
+    ]).then(function (parts) {
+      if (!parts[0]) throw new Error('no xl/workbook.xml — not an .xlsx file');
+      var book = parseXml(parts[0], 'workbook.xml');
+      var strings = parts[2] ? sharedStrings(parseXml(parts[2], 'sharedStrings.xml'))
+                             : [];
+
+      // rId -> worksheet path
+      var targets = {};
+      if (parts[1]) {
+        tags(parseXml(parts[1], 'workbook.xml.rels').documentElement, 'Relationship')
+          .forEach(function (rel) {
+            var target = attr(rel, 'Target') || '';
+            targets[attr(rel, 'Id')] =
+              target.charAt(0) === '/' ? target.slice(1)
+                                       : 'xl/' + target.replace(/^\.\//, '');
+          });
+      }
+
+      var listed = tags(book.documentElement, 'sheet');
+      var wanted = listed.map(function (sheet, i) {
+        var path = targets[attr(sheet, 'id')] ||
+                   ('xl/worksheets/sheet' + (i + 1) + '.xml');
+        return { name: attr(sheet, 'name') || ('Sheet' + (i + 1)), path: path };
+      });
+
+      return Promise.all(wanted.map(function (s) {
+        return readText(zip, s.path).then(function (text) {
+          return { name: s.name,
+                   rows: text ? sheetRows(parseXml(text, s.path), strings) : [] };
+        });
+      })).then(function (sheets) { return { sheets: sheets }; });
+    });
+  }
+
+  global.LCAXlsx = { read: read };
+}(this));
+</script>
+<script type="text/javascript">/*
+ * parse.js — the contribution-tree parser, ported from generate_sankey.py.
+ *
+ * Turns the 2-D cell rectangle xlsx.js hands back into the same payload the
+ * Python script builds, so the browser can do the whole job from a dropped
+ * file and the dashboard downstream cannot tell the difference.
+ *
+ * This is a *port*, not a reimplementation, and the order of operations is
+ * load-bearing in a few places that look arbitrary — they are marked below.
+ * generate_sankey.py stays the reference: tools/verify_parse.py diffs the two
+ * on real workbooks, and any change here should be checked against it.
+ *
+ *   LCAParse.build(rows, options) -> {payload, initial, stats} | throws
+ */
+(function (global) {
+  'use strict';
+
+  var MAX_DEPTH_SCAN = 10;
+  var LOCATION_RE = /\s[-–]\s*([A-Za-z]{2,4}(?:-[A-Za-z0-9]{1,10})?)\s*$/;
+  var UNIT_RE = /\[([^\]]+)\]/;
+
+  function isText(value) {
+    // Python checks isinstance(val, str): a number sitting in a name column is
+    // not a node, and treating it as one invents a branch.
+    return typeof value === 'string' && value.trim() !== '';
+  }
+
+  /* pandas' to_numeric(errors='coerce'), near enough: accept a real number or
+     a string that is entirely numeric, otherwise NaN.  parseFloat alone is too
+     eager — it reads '12 kg' as 12, which pandas would have dropped. */
+  function toNumber(value) {
+    if (typeof value === 'number') return isFinite(value) ? value : NaN;
+    if (typeof value !== 'string') return NaN;
+    var text = value.trim();
+    if (!text) return NaN;
+    if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text)) return NaN;
+    return parseFloat(text);
+  }
+
+  function cell(rows, r, c) {
+    var row = rows[r];
+    if (!row) return null;
+    var value = row[c];
+    return value === undefined ? null : value;
+  }
+
+  function width(rows) {
+    var n = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] && rows[i].length > n) n = rows[i].length;
+    }
+    return n;
+  }
+
+  /* ── reading ──────────────────────────────────────────────────────────── */
+  function findResultColumn(headerRow, columns) {
+    if (headerRow) {
+      for (var i = 0; i < headerRow.length; i++) {
+        var v = headerRow[i];
+        if (v !== null && v !== undefined &&
+            String(v).toLowerCase().indexOf('result') >= 0) {
+          return i;
+        }
+      }
+    }
+    return Math.min(8, columns - 1);
+  }
+
+  function readSheet(rows) {
+    var impact = '';
+    var first = cell(rows, 0, 0);
+    if (first !== null && first !== undefined) {
+      impact = String(first).trim()
+        .replace(/^\s*upstream contributions to:\s*/i, '');
+    }
+
+    var headerIndex = -1;
+    for (var r = 0; r < rows.length; r++) {
+      var v = cell(rows, r, 0);
+      if (v !== null && String(v).trim().toLowerCase() === 'processes') {
+        headerIndex = r;
+        break;
+      }
+    }
+
+    var headerRow = null;
+    var body = rows;
+    if (headerIndex >= 0) {
+      headerRow = rows[headerIndex];
+      body = rows.slice(headerIndex + 1);
+    }
+
+    var unit = '';
+    if (headerRow) {
+      var resultCol = findResultColumn(headerRow, width(body));
+      var match = UNIT_RE.exec(String(headerRow[resultCol] === undefined ||
+                                      headerRow[resultCol] === null
+                                      ? '' : headerRow[resultCol]));
+      if (match) unit = match[1];
+    }
+
+    return { rows: body, headerRow: headerRow, impact: impact, unit: unit,
+             headerIndex: headerIndex };
+  }
+
+  /* ── parsing ──────────────────────────────────────────────────────────── */
+  function parseTree(rows, headerRow, maxDepth) {
+    var columns = width(rows);
+    var resultCol = findResultColumn(headerRow, columns);
+    var scanCols = Math.min(MAX_DEPTH_SCAN, columns);
+
+    var links = [], path = {};
+    var rootValue = null, negatives = 0, deepest = 0;
+
+    for (var r = 0; r < rows.length; r++) {
+      var depth = -1, nodeName = null;
+      for (var d = 0; d < scanCols; d++) {
+        var v = cell(rows, r, d);
+        if (isText(v)) { depth = d; nodeName = v; break; }
+      }
+      if (nodeName === null) continue;
+
+      var result = toNumber(cell(rows, r, resultCol));
+      if (isNaN(result) || result === 0) continue;
+
+      // Only rows that survive the numeric check update the path — a skipped
+      // row must not become the parent of the rows under it.
+      path[depth] = nodeName;
+      if (depth === 0 && rootValue === null) rootValue = Math.abs(result);
+      if (depth > deepest) deepest = depth;
+
+      if (depth > 0 && depth <= maxDepth) {
+        var parent = path[depth - 1];
+        if (parent && parent !== nodeName) {
+          if (result < 0) negatives++;
+          links.push({ source: parent, target: nodeName,
+                       value: Math.abs(result), depth: depth,
+                       negative: result < 0 });
+        }
+      }
+    }
+
+    return { links: links, rootValue: rootValue, negatives: negatives,
+             deepest: deepest };
+  }
+
+  /* ── labels ───────────────────────────────────────────────────────────── */
+  function splitName(fullName) {
+    var text = String(fullName).split(/\s+/).filter(Boolean).join(' ');
+    var location = '';
+    var match = LOCATION_RE.exec(text);
+    if (match) location = match[1];
+
+    var short = text.split('|')[0].trim();
+    var shortMatch = LOCATION_RE.exec(short);
+    if (shortMatch) {
+      if (!location) location = shortMatch[1];
+      short = short.slice(0, shortMatch.index).trim();
+    }
+    return { short: short || text, location: location };
+  }
+
+  /* Only names that actually collide get a location suffix, and a numeric one
+     if they still clash.  Iteration follows first-appearance order, the same
+     as the Python dict, because that is what decides which of two identical
+     labels keeps the plain form and which becomes "#2". */
+  function resolveLabels(fullNames) {
+    var parsed = {}, shorts = {};
+    fullNames.forEach(function (name) {
+      var split = splitName(name);
+      parsed[name] = split;
+      (shorts[split.short] || (shorts[split.short] = {}))[name] = true;
+    });
+
+    function count(map) { return Object.keys(map).length; }
+
+    var labels = {}, used = {}, collided = 0;
+    Object.keys(shorts).forEach(function (s) {
+      if (count(shorts[s]) > 1) collided++;
+    });
+
+    fullNames.forEach(function (name) {
+      var split = parsed[name];
+      var label;
+      if (count(shorts[split.short]) > 1) {
+        label = split.location ? split.short + ' (' + split.location + ')'
+                               : split.short;
+      } else {
+        label = split.short;
+      }
+      if (Object.prototype.hasOwnProperty.call(used, label) &&
+          used[label] !== name) {
+        var suffix = 2;
+        while (Object.prototype.hasOwnProperty.call(used, label + ' #' + suffix)) {
+          suffix++;
+        }
+        label = label + ' #' + suffix;
+      }
+      used[label] = name;
+      labels[name] = label;
+    });
+
+    return { labels: labels, collided: collided };
+  }
+
+  /* ── payload ──────────────────────────────────────────────────────────── */
+  function buildPayload(links, rootValue, meta, payloadMin) {
+    var names = [], index = {};
+    function idx(name) {
+      if (!Object.prototype.hasOwnProperty.call(index, name)) {
+        index[name] = names.length;
+        names.push(name);
+      }
+      return index[name];
+    }
+
+    var scale = rootValue ? 100 / rootValue : 1;
+    var s = [], t = [], v = [], d = [], n = [];
+    var pruned = 0;
+
+    links.forEach(function (link) {
+      var value = link.value * scale;
+      if (payloadMin && value < payloadMin) { pruned++; return; }
+      s.push(idx(link.source));
+      t.push(idx(link.target));
+      // full precision on purpose — the browser sums these
+      v.push(value);
+      d.push(link.depth);
+      n.push(link.negative ? 1 : 0);
+    });
+
+    var resolved = resolveLabels(names);
+    var shorts = names.map(function (name) { return resolved.labels[name]; });
+
+    return {
+      payload: { meta: meta, names: names, shorts: shorts,
+                 links: { s: s, t: t, v: v, d: d, n: n } },
+      pruned: pruned,
+      collided: resolved.collided
+    };
+  }
+
+  /* ── entry point ──────────────────────────────────────────────────────── */
+  function build(rows, options) {
+    var opts = options || {};
+    var maxDepth = opts.maxDepth === undefined ? 6 : opts.maxDepth;
+    var payloadMin = opts.payloadMin || 0;
+    var source = opts.source || 'workbook.xlsx';
+
+    var sheet = readSheet(rows);
+    var tree = parseTree(sheet.rows, sheet.headerRow, maxDepth);
+    if (!tree.links.length) {
+      throw new Error("No links parsed. Check the indentation and the " +
+                      "'Result' column.");
+    }
+
+    var depth = Math.min(maxDepth, tree.deepest);
+    var title = opts.title || (sheet.impact
+      ? sheet.impact + ' — contribution tree'
+      : source + ' — contribution tree');
+
+    var meta = {
+      source: source,
+      impact: sheet.impact,
+      unit: sheet.unit,
+      rootValue: tree.rootValue ? Number(tree.rootValue) : null,
+      maxDepth: depth,
+      title: title,
+      generated: new Date().toISOString().slice(0, 10)
+    };
+
+    var built = buildPayload(tree.links, tree.rootValue, meta, payloadMin);
+
+    return {
+      payload: built.payload,
+      stats: {
+        headerRow: sheet.headerIndex >= 0 ? sheet.headerIndex + 1 : null,
+        links: built.payload.links.s.length,
+        nodes: built.payload.names.length,
+        maxDepth: depth,
+        deepest: tree.deepest,
+        negatives: tree.negatives,
+        collided: built.collided,
+        pruned: built.pruned,
+        rootValue: tree.rootValue,
+        unit: sheet.unit,
+        impact: sheet.impact
+      }
+    };
+  }
+
+  global.LCAParse = {
+    build: build,
+    // exposed for the parity harness
+    readSheet: readSheet,
+    parseTree: parseTree,
+    splitName: splitName,
+    resolveLabels: resolveLabels
+  };
+}(this));
+</script>
+<script type="text/javascript">/*
+ * app.js — the drop-in build's controller.
+ *
+ * Reads a dropped workbook with xlsx.js, turns it into a payload with
+ * parse.js, and hands that to LCADashboard.start().  Everything below that
+ * point is the same code the per-workbook build runs, so the two cannot drift.
+ *
+ * The whole job happens in the page: no upload, no server, nothing to install
+ * for whoever you send the file to.  That is the point of the exercise, and it
+ * is also why the parser had to be ported rather than called.
+ */
+(function (global) {
+  'use strict';
+
+  var INITIAL = {
+    levels: 2,
+    threshold: 2.0,
+    maxNodes: 0,
+    smallMode: 'all',
+    balance: false,
+    negativeColor: '#d03b3b'
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  var state = {
+    sheets: [],          // [{name, rows}]
+    sheetIndex: 0,
+    source: '',
+    panelHtml: null      // pristine control markup, see restart()
+  };
+
+  function showDrop(show) {
+    $('drop').hidden = !show;
+    $('source-bar').hidden = show;
+    // the empty stage and panel would otherwise sit under the drop screen
+    var app = document.querySelector('.app');
+    if (app) app.hidden = show;
+  }
+
+  function fail(message) {
+    var box = $('drop-error');
+    box.hidden = false;
+    box.textContent = message;
+    showDrop(true);
+  }
+
+  function clearError() { $('drop-error').hidden = true; }
+
+  /* Rebuild the control panel from its original markup before each start.
+     wire() attaches listeners to every control, and a second file would
+     otherwise bind them twice over — dropping the nodes drops the listeners
+     with them, which is cheaper and more reliable than unbinding by hand. */
+  function restart(payload) {
+    var panel = $('panel');
+    if (state.panelHtml === null) {
+      state.panelHtml = panel.innerHTML;
+    } else {
+      panel.innerHTML = state.panelHtml;
+      try { if (global.Plotly) Plotly.purge($('chart')); } catch (err) { /* fresh div */ }
+      $('chart').innerHTML = '';
+    }
+    global.LCADashboard.start(payload, INITIAL, global.PALETTES);
+  }
+
+  function buildFrom(sheetIndex) {
+    var sheet = state.sheets[sheetIndex];
+    if (!sheet) return fail('That sheet is empty.');
+
+    var maxDepth = parseInt($('src-maxdepth').value, 10);
+    if (!(maxDepth >= 1)) maxDepth = 6;
+    var payloadMin = parseFloat($('src-payloadmin').value);
+    if (!(payloadMin >= 0)) payloadMin = 0;
+
+    var built;
+    try {
+      built = LCAParse.build(sheet.rows, {
+        maxDepth: maxDepth,
+        payloadMin: payloadMin,
+        source: state.source
+      });
+    } catch (err) {
+      return fail(String(err && err.message ? err.message : err));
+    }
+
+    clearError();
+    showDrop(false);
+    state.sheetIndex = sheetIndex;
+    $('src-name').textContent = state.source;
+
+    // the payload cap is also the ceiling for the Levels slider
+    $('src-maxdepth').value = maxDepth;
+    restart(built.payload);
+
+    var s = built.stats;
+    var note = [s.links + ' links', s.nodes + ' processes',
+                'depth 0–' + s.maxDepth];
+    if (s.negatives) note.push(s.negatives + ' negative');
+    if (s.pruned) note.push(s.pruned + ' pruned');
+    $('src-name').title = state.source + ' — ' + note.join(', ');
+    return built;
+  }
+
+  function loadSheets(sheets, name) {
+    var usable = sheets.filter(function (s) { return s.rows.length; });
+    if (!usable.length) return fail('No readable sheets in that workbook.');
+
+    state.sheets = usable;
+    state.source = name;
+
+    var picker = $('src-sheet');
+    picker.innerHTML = '';
+    usable.forEach(function (s, i) {
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = s.name;
+      picker.appendChild(opt);
+    });
+    picker.parentNode.style.display = usable.length > 1 ? '' : 'none';
+    picker.value = '0';
+
+    // Prefer a sheet that actually looks like a contribution tree, so a
+    // workbook whose first tab is a cover sheet still opens on the right one.
+    var pick = 0;
+    for (var i = 0; i < usable.length; i++) {
+      var head = LCAParse.readSheet(usable[i].rows);
+      if (head.headerIndex >= 0) { pick = i; break; }
+    }
+    picker.value = String(pick);
+    buildFrom(pick);
+  }
+
+  function readFile(file) {
+    if (!file) return;
+    clearError();
+    $('drop-note').textContent = 'Reading ' + file.name + ' …';
+
+    file.arrayBuffer().then(function (buffer) {
+      return LCAXlsx.read(buffer);
+    }).then(function (book) {
+      $('drop-note').textContent = 'Everything is read and drawn in this ' +
+        'browser. The file is never uploaded.';
+      loadSheets(book.sheets, file.name);
+    }).catch(function (err) {
+      $('drop-note').textContent = 'Everything is read and drawn in this ' +
+        'browser. The file is never uploaded.';
+      var message = String(err && err.message ? err.message : err);
+      if (/zip|workbook\.xml/i.test(message)) {
+        message += '  (An .xls saved by an old Excel is a different format — ' +
+                   're-save it as .xlsx.)';
+      }
+      fail('Could not read ' + file.name + ': ' + message);
+    });
+  }
+
+  /* ── wiring ───────────────────────────────────────────────────────────── */
+  function wire() {
+    var picker = $('drop-file');
+    $('drop-pick').addEventListener('click', function () { picker.click(); });
+    $('src-open').addEventListener('click', function () { picker.click(); });
+    picker.addEventListener('change', function () {
+      readFile(this.files && this.files[0]);
+      this.value = '';                 // so the same file can be re-opened
+    });
+
+    // the whole window is the target, not just the panel, so a mis-aimed drop
+    // still works
+    ['dragenter', 'dragover'].forEach(function (type) {
+      window.addEventListener(type, function (ev) {
+        ev.preventDefault();
+        document.body.classList.add('dragging');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (type) {
+      window.addEventListener(type, function (ev) {
+        ev.preventDefault();
+        if (type === 'drop' || ev.target === document.documentElement) {
+          document.body.classList.remove('dragging');
+        }
+      });
+    });
+    window.addEventListener('drop', function (ev) {
+      var files = ev.dataTransfer && ev.dataTransfer.files;
+      if (files && files.length) readFile(files[0]);
+    });
+
+    $('src-sheet').addEventListener('change', function () {
+      buildFrom(parseInt(this.value, 10) || 0);
+    });
+    // max depth and the payload floor are build-time flags in the script; here
+    // the workbook is still in memory, so they can just re-parse
+    ['src-maxdepth', 'src-payloadmin'].forEach(function (id) {
+      $(id).addEventListener('change', function () {
+        if (state.sheets.length) buildFrom(state.sheetIndex);
+      });
+    });
+
+    showDrop(true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+
+  /* ── parity harness ───────────────────────────────────────────────────── */
+  /* Prints the digests tools/verify_parse.py prints for the same workbook.  A
+     port is only worth having if something keeps checking it, and every line
+     of these two outputs has to match. */
+  function sha16(text) {
+    var bytes = new TextEncoder().encode(text);
+    return crypto.subtle.digest('SHA-256', bytes).then(function (buffer) {
+      var out = '';
+      new Uint8Array(buffer).forEach(function (b) {
+        out += (b < 16 ? '0' : '') + b.toString(16);
+      });
+      return out.slice(0, 16);
+    });
+  }
+
+  /* Python's %.11e, reproduced: JavaScript writes a one-digit exponent where
+     Python pads to two, and that difference is not a parsing bug. */
+  function canon(x) {
+    return Number(x).toExponential(11).replace(/e([+-])(\d)$/, 'e$10$2');
+  }
+
+  global.__lcaParityDigest = function (url, maxDepth, payloadMin) {
+    return global.__lcaDumpPayload(url, maxDepth, payloadMin)
+      .then(function (built) {
+        var p = built.payload, l = p.links;
+        var parts = {
+          names: p.names.join('\n'),
+          shorts: p.shorts.join('\n'),
+          s: l.s.join(','),
+          t: l.t.join(','),
+          d: l.d.join(','),
+          n: l.n.join(','),
+          v: l.v.map(canon).join(',')
+        };
+        var keys = Object.keys(parts);
+        return Promise.all(keys.map(function (k) { return sha16(parts[k]); }))
+          .then(function (hashes) {
+            var out = { nodes: String(p.names.length),
+                        links: String(l.s.length) };
+            keys.forEach(function (k, i) { out[k] = hashes[i]; });
+            out.rootValue = canon(p.meta.rootValue || 0);
+            out.unit = p.meta.unit;
+            out.impact = p.meta.impact;
+            out.maxDepth = String(p.meta.maxDepth);
+            return out;
+          });
+      });
+  };
+
+  /* Parse a workbook fetched by URL, without going through the drop UI. */
+  global.__lcaDumpPayload = function (url, maxDepth, payloadMin) {
+    return fetch(url).then(function (r) { return r.arrayBuffer(); })
+      .then(function (buffer) { return LCAXlsx.read(buffer); })
+      .then(function (book) {
+        var name = url.split('/').pop();
+        var sheets = book.sheets.filter(function (s) { return s.rows.length; });
+        var pick = 0;
+        for (var i = 0; i < sheets.length; i++) {
+          if (LCAParse.readSheet(sheets[i].rows).headerIndex >= 0) { pick = i; break; }
+        }
+        return LCAParse.build(sheets[pick].rows, {
+          maxDepth: maxDepth === undefined ? 6 : maxDepth,
+          payloadMin: payloadMin || 0,
+          source: decodeURIComponent(name)
+        });
+      });
+  };
+}(this));
+</script>
+</body>
+</html>

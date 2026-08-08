@@ -1,11 +1,15 @@
 # openLCA Sankey
 
-Generate a self-contained, interactive Sankey diagram from an openLCA
-contribution-tree Excel export.
+Interactive Sankey diagrams from openLCA contribution-tree exports —
+directly in your browser.
 
-The result is a single HTML file containing the diagram, controls, and data.
-It can be opened locally, shared with collaborators, or archived alongside a
-research result without running a server.
+**[→ Open the tool](https://subramaniyasharma.github.io/openlca-sankey/)**
+
+Upload an Excel file exported from openLCA's *Result → Contribution tree →
+Export to Excel* workflow and explore it as a live, editable Sankey diagram.
+No Python, no server, no installation required. The workbook is read, parsed
+and drawn entirely in the page — nothing is uploaded, and whoever you send the
+file to needs no network.
 
 ## Features
 
@@ -18,94 +22,41 @@ research result without running a server.
 - Turn node labels to any angle between −90° and +90°, exports included.
 - Export PNG, SVG, CSV, and reusable style settings.
 - Use a numbered publication view with a process key.
+- Light/dark theme that follows your system preference.
 
-## Quick start
+## How it works
 
-Install the build-time dependencies:
+1. Open the tool in your browser.
+2. Drop (or browse for) your `.xlsx` contribution-tree export.
+3. The file is parsed **entirely in the browser** using native DOM decompression
+   and browser APIs.
+4. The interactive dashboard renders with [Plotly](https://plotly.com/javascript/).
 
-```bash
-python -m pip install -e ".[sankey]"
-```
-
-Export a contribution tree from openLCA, then generate the dashboard:
-
-```bash
-python generate_sankey.py contribution_tree.xlsx -o dashboard.html
-```
-
-Open `dashboard.html` in a browser. No Python runtime or web server is needed
-to use the generated dashboard.
-
-## Browser app (drop in a workbook)
-
-Build a single HTML file that reads *any* contribution tree, in the browser:
-
-```bash
-python build_app.py
-```
-
-Open `sankey_app.html` and drop an `.xlsx` on it. The workbook is read, parsed
-and drawn entirely in the page — nothing is uploaded, and whoever you send the
-file to needs no Python, no install and no network. It also works from a static
-host such as GitHub Pages.
-
-Two things that are build-time flags in the script become live controls here,
-because the workbook is still in memory: the payload depth cap, and the
+Two things that were build-time flags in the old CLI are live controls here,
+because the workbook is in memory: the payload depth cap, and the
 percentage below which links are dropped. A workbook with several sheets gets a
 sheet picker.
 
-The parser is a port of `generate_sankey.py`, and `tools/verify_parse.py` exists
-to keep the two honest — see
-[README_sankey.md](README_sankey.md#the-browser-build).
+## Python tool
 
-## Desktop app (Windows)
-
-`sankey_gui.py` is a small desktop front end over the same script: pick the
-workbooks, set the starting values, and it writes one dashboard per file.
-Double-click **`Sankey dashboard.bat`**, or run it directly:
-
-```bash
-python sankey_gui.py
-```
-
-It uses only the standard library — Tkinter ships with the python.org Windows
-installer — and calls `generate_sankey.main()` rather than reimplementing
-anything, so the command line remains the reference path. See
-[README_sankey.md](README_sankey.md#desktop-app) for what each field does.
-
-The command-line interface also supports `--max-depth`, `--levels`,
-`--threshold`, `--max-nodes`, `--pool`, `--balance`, `--title`, `--payload-min`,
-`--cdn`, and `--no-open`. See [README_sankey.md](README_sankey.md) for the
-complete reference.
-
-## Input format
-
-The parser is designed for the Excel file produced by openLCA's **Result →
-Contribution tree → Export to Excel** workflow. It locates the `Processes`
-header and the `Result [...]` column automatically, then reads the indentation
-of the process columns to reconstruct the tree.
+The original Python command-line tool and Windows GUI (`generate_sankey.py`, `sankey_gui.py`, etc.) that reads an
+Excel export and packages a self-contained HTML dashboard are preserved in the
+[`python-tool`](https://github.com/subramaniyasharma/openlca-sankey/tree/python-tool) branch.
 
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
-| `generate_sankey.py` | Reads the Excel export and packages the dashboard. |
-| `build_app.py` | Packages the drop-in browser build. |
-| `sankey_gui.py` | Windows desktop front end over `generate_sankey.py`. |
-| `Sankey dashboard.bat` | Double-click launcher for the desktop app. |
-| `gui_assets/` | Logo art used by the desktop app. |
+| `index.html` | The standalone browser tool (hosted via GitHub Pages). |
 | `sankey_assets/xlsx.js` | Minimal read-only `.xlsx` reader, no dependencies. |
-| `sankey_assets/parse.js` | The contribution-tree parser, ported from Python. |
+| `sankey_assets/parse.js` | The contribution-tree parser. |
 | `sankey_assets/app.js` | Drop-in build: file handling and sheet picking. |
-| `tools/verify_parse.py` | Diffs the JS parser against the Python one. |
 | `sankey_assets/flows.js` | The single browser-side flow pipeline. |
 | `sankey_assets/dashboard.js` | Controls, rendering, editing, persistence, and export. |
 | `sankey_assets/template.html` | Dashboard page structure. |
 | `sankey_assets/dashboard.css` | Dashboard layout and styling. |
-| `docs/` | Engineering handoff and development history. |
 
-The Python layer parses and packages data. Flow calculations stay in
-`sankey_assets/flows.js` so there is one implementation to maintain.
+*Note: The `index.html` file in this branch is pre-built from the `sankey_assets/`.*
 
 ## Acknowledgments
 
