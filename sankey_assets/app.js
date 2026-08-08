@@ -38,14 +38,38 @@
     if (app) app.hidden = show;
   }
 
+  function errorText(err) {
+    var text = String(err && err.message ? err.message : err || 'Unknown error');
+    return text.length > 320 ? text.slice(0, 317) + '…' : text;
+  }
+
   function fail(message) {
     var box = $('drop-error');
+    var detail = $('drop-error-message');
     box.hidden = false;
-    box.textContent = message;
+    if (detail) detail.textContent = message;
+    else box.textContent = message;
     showDrop(true);
   }
 
-  function clearError() { $('drop-error').hidden = true; }
+  function clearError() {
+    $('drop-error').hidden = true;
+    var detail = $('drop-error-message');
+    if (detail) detail.textContent = '';
+  }
+
+  function exitToLoader() {
+    try { if (global.Plotly) Plotly.purge($('chart')); } catch (err) { /* best effort */ }
+    $('chart').innerHTML = '';
+    $('drop-file').value = '';
+    $('src-sheet').innerHTML = '';
+    state.sheets = [];
+    state.sheetIndex = 0;
+    state.source = '';
+    $('drop-note').textContent = 'Everything is read and drawn in this browser. The file is never uploaded.';
+    clearError();
+    showDrop(true);
+  }
 
   /* Keep the branded theme buttons useful before a workbook is opened.  The
      dashboard controller takes over the same controls after start(), but the
@@ -80,6 +104,13 @@
       };
       if (mq.addEventListener) mq.addEventListener('change', onScheme);
       else if (mq.addListener) mq.addListener(onScheme);
+    }
+  }
+
+  function placeBrandMark() {
+    var logo = $('brand-logo'), drop = $('drop-inner');
+    if (logo && drop && logo.parentNode !== drop) {
+      drop.insertBefore(logo, drop.firstChild);
     }
   }
 
@@ -126,7 +157,11 @@
 
     // the payload cap is also the ceiling for the Levels slider
     $('src-maxdepth').value = maxDepth;
-    restart(built.payload);
+    try {
+      restart(built.payload);
+    } catch (err) {
+      return fail('The workbook was read, but the dashboard could not render it.\n\n' + errorText(err));
+    }
 
     var s = built.stats;
     var note = [s.links + ' links', s.nodes + ' processes',
@@ -185,16 +220,23 @@
         message += '  (An .xls saved by an old Excel is a different format — ' +
                    're-save it as .xlsx.)';
       }
-      fail('Could not read ' + file.name + ': ' + message);
+      fail('Could not read ' + file.name + ': ' + errorText(message));
     });
   }
 
   /* ── wiring ───────────────────────────────────────────────────────────── */
   function wire() {
+    placeBrandMark();
     wireBrandTheme();
     var picker = $('drop-file');
     $('drop-pick').addEventListener('click', function () { picker.click(); });
+    $('drop-retry').addEventListener('click', function () {
+      clearError();
+      picker.click();
+    });
+    $('drop-dismiss').addEventListener('click', clearError);
     $('src-open').addEventListener('click', function () { picker.click(); });
+    $('src-exit').addEventListener('click', exitToLoader);
     picker.addEventListener('change', function () {
       readFile(this.files && this.files[0]);
       this.value = '';                 // so the same file can be re-opened
@@ -230,6 +272,15 @@
       $(id).addEventListener('change', function () {
         if (state.sheets.length) buildFrom(state.sheetIndex);
       });
+    });
+
+    window.addEventListener('error', function (ev) {
+      if (ev.error) {
+        fail('The dashboard encountered an unexpected error. You can choose the workbook again.\n\n' + errorText(ev.error));
+      }
+    });
+    window.addEventListener('unhandledrejection', function (ev) {
+      fail('The dashboard could not finish loading. You can choose the workbook again.\n\n' + errorText(ev.reason));
     });
 
     showDrop(true);

@@ -20,13 +20,10 @@
 
 <button id="panel-toggle" class="btn" type="button" aria-controls="panel" aria-expanded="true">Controls</button>
 
-<!-- LEGACI brand header — from the Claude Design mockup. The logo is inlined
-     as a data URI so a generated file still needs nothing from the network. -->
+<!-- Lightweight brand header; the full mark is shown on the loading screen. -->
 <header id="brand-header">
-  <img id="brand-logo" src="{{LOGO}}" alt="LEGACI">
   <div id="brand-titles">
     <div id="brand-name">LCA-Sankey Tool</div>
-    <div id="brand-lab">Laboratory for Eco-design, Green Chemistry and Circular Innovation</div>
   </div>
   <div id="brand-spacer"></div>
   <span id="brand-tag">Open source</span>
@@ -41,13 +38,22 @@
      and the markup costs it nothing. -->
 <div id="drop" hidden>
   <div id="drop-inner">
+    <img id="brand-logo" src="{{LOGO}}" alt="LEGACI">
     <h1>openLCA Sankey</h1>
+    <p class="drop-lab">Laboratory for Eco-design, Green Chemistry and Circular Innovation</p>
     <p>Drop a contribution-tree <b>.xlsx</b> here</p>
     <p><button class="btn" type="button" id="drop-pick">Choose a file…</button></p>
     <input type="file" id="drop-file" accept=".xlsx" hidden>
     <p id="drop-note">Everything is read and drawn in this browser. The file is
       never uploaded.</p>
-    <p id="drop-error" hidden></p>
+    <div id="drop-error" role="alert" aria-live="assertive" hidden>
+      <strong>Could not open that workbook.</strong>
+      <p id="drop-error-message"></p>
+      <div class="error-actions">
+        <button class="btn primary" type="button" id="drop-retry">Choose another file</button>
+        <button class="btn" type="button" id="drop-dismiss">Dismiss</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -65,6 +71,7 @@
       <input type="number" id="src-payloadmin" min="0" max="100" step="0.1" value="0">
       <span class="spacer"></span>
       <button class="btn" type="button" id="src-open">Open another file…</button>
+      <button class="btn" type="button" id="src-exit">Exit to file loader</button>
     </div>
     <div class="stage-bar" role="status" aria-live="polite" aria-atomic="true">
       <span id="stat-flows"></span>

@@ -413,8 +413,11 @@ body:not(.panel-hidden) #panel-toggle { display: none; }
   text-align: center;
 }
 #drop[hidden] { display: none; }
-#drop-inner { max-width: 30rem; padding: 2rem; }
-#drop-inner h1 { margin: 0 0 .75rem; font-size: 1.5rem; }
+#drop-inner { max-width: 34rem; padding: 2rem; }
+#brand-header #brand-logo { display: none; }
+#drop #brand-logo { display: block; width: 76px; height: 76px; object-fit: contain; margin: 0 auto 1rem; }
+#drop-inner h1 { margin: 0 0 .35rem; font-size: 2rem; }
+#drop-inner .drop-lab { margin: 0 0 1.25rem; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 #drop-inner p { margin: .5rem 0; color: var(--ink-soft); }
 #drop-error {
   margin-top: 1rem;
@@ -423,10 +426,16 @@ body:not(.panel-hidden) #panel-toggle { display: none; }
   border-radius: 6px;
   color: var(--negative, #d03b3b);
   text-align: left;
-  white-space: pre-wrap;
 }
+#drop-error strong { display: block; color: var(--ink); }
+#drop-error p { margin: .35rem 0 .65rem; white-space: pre-wrap; }
+.error-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.error-actions .btn { flex: 1 1 auto; }
+#drop-error button { min-height: 30px; }
 #drop-error[hidden] { display: none; }
 body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-offset: 1rem; }
+
+#source-bar #src-exit { margin-left: 4px; }
 
 #source-bar { gap: .5rem; flex-wrap: wrap; }
 #source-bar[hidden] { display: none; }
@@ -459,18 +468,11 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
   flex: 0 0 auto;
 }
 #brand-header[hidden] { display: none; }
-#brand-logo { width: 34px; height: 34px; object-fit: contain; flex: 0 0 auto; }
 #brand-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 #brand-name {
-  font: 700 13px/1.15 var(--brand-sans);
+  font: 700 20px/1.15 var(--brand-sans);
   letter-spacing: .01em;
   color: var(--ink);
-}
-#brand-lab {
-  font: 400 10px/1.2 var(--brand-mono-label);
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
 }
 #brand-spacer { flex: 1 1 auto; }
 #brand-tag {
@@ -503,5 +505,7 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
 #brand-source { font-size: 11px; color: var(--ink-muted); }
 
 @media (max-width: 720px) {
-  #brand-lab, #brand-source { display: none; }
+  #brand-source { display: none; }
+  #brand-name { font-size: 18px; }
+  #drop #brand-logo { width: 64px; height: 64px; }
 }
