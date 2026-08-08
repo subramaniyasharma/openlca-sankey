@@ -135,18 +135,41 @@ buttons are the aware path.
 
 ### Label crowding
 
-`positions()` pushes the nodes of a column apart so their labels clear each
-other. It used to do that with one gap for the whole column, sized for a single
-line — so a column of twenty wrapped ecoinvent names got stacked 24px apart with
-32px of text in each, and the deepest column came out as a pile. The gap is now
-per-pair: two neighbours need half of each of their own label blocks between
-their centres, plus a fixed clearance, and a column that still cannot fit gets
-squeezed evenly rather than pushed off the bottom.
+Two separate bugs used to make a dense diagram unreadable. Both are worth
+knowing about, because both are Plotly behaviours rather than anything obvious
+in this code.
 
-Note that these positions are a request, not a command — Plotly re-packs the
-column from the top, so the drawn gaps track the requested ones without matching
-them exactly. Where a column is genuinely too dense for its height, the label
-cutoff and the wrap width are the real controls.
+**Node spacing is `node.pad`, not `node.y`.** Plotly's Sankey lays each column
+out itself and treats supplied `y` values as a hint: on the reported figure
+`positions()` asked for 41px between neighbours in the deepest column and Plotly
+drew them 18px apart — exactly `node.pad` — with 32px of text in each. No amount
+of arranging fixes that, because the number Plotly actually honours is the pad.
+`effectivePad()` therefore raises the pad to the tallest label on the diagram,
+and `autoHeight()` sizes the canvas with the same figure. The Node gap control
+becomes a floor rather than the final word; where a column is too dense to space
+even so, Plotly clamps the pad itself and the label cutoff and wrap width are
+the remaining controls.
+
+**`Plotly.react` strands old Sankey nodes.** It removes the previous data set's
+node groups from an end-of-transition callback, so a second `react` arriving
+before that callback runs leaves them in the DOM permanently. Dragging the
+Levels slider is precisely that — one render per `input` event — and on a large
+tree it left *hundreds* of stale labels piled over the real diagram while the
+status bar honestly reported the small number the pipeline had produced. It
+looks like a rendering bug in the flow pipeline and is not one.
+
+`draw()` therefore compares the node set against the last one drawn and calls
+`Plotly.newPlot` when it has changed, keeping `react` for style-only updates
+where its preserved hover and drag state is worth having. `newPlot` purges the
+div's event listeners along with its contents, so `bindPlotEvents()` re-attaches
+them on every full redraw — miss that and node selection silently stops working
+after the first data change.
+
+Related: `applyLabelStyling()` refuses to touch a half-drawn diagram at all. It
+writes to `transform`, which is the attribute those exit transitions animate, so
+restyling mid-flight cancels the transition and strands the nodes by a second
+route. It compares the node group count against the figure it built and waits
+if they disagree.
 
 `labelExtent()` sizes the canvas from the rotated bounding box
 (`h·cos θ + w·sin θ`) rather than the line count, so upright labels get the room

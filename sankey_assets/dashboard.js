@@ -2,9 +2,11 @@
  * dashboard.js — controls, figure building and export for the Sankey dashboard.
  *
  * Reads the inlined PAYLOAD/INITIAL/PALETTES globals, runs LCAFlows.buildFlows
- * on every data change, and re-renders through Plotly.react so drags and hover
- * state survive.  Written in ES5 so the generated file works in older browsers
- * and can be exercised by a plain script host during verification.
+ * on every data change, and re-renders through Plotly.react when only the
+ * styling moved — which keeps drag and hover state — or Plotly.newPlot when the
+ * node set itself changed, which is the only way to stop Plotly stranding the
+ * previous set's nodes in the DOM.  Written in ES5 so the generated file works
+ * in older browsers and can be exercised by a plain script host.
  */
 (function () {
   'use strict';
@@ -382,6 +384,24 @@
                     Math.max(80, figureWidth * 0.45));
   }
 
+  /* Plotly's Sankey lays each column out itself and treats node.y as a hint —
+     ask for 41px between two nodes in a dense column and it will still draw
+     them 18px apart.  What it does honour is node.pad, the minimum gap it
+     leaves between node rectangles.  So the room a label needs has to be
+     expressed as pad, or a column of wrapped ecoinvent names collapses to the
+     default gap and the labels sit on top of each other no matter what
+     positions() asked for.
+
+     The Node gap control stays the floor; this only ever raises it, and only
+     as far as the tallest label actually on the diagram. */
+  function effectivePad(labels) {
+    var tallest = 0;
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i]) tallest = Math.max(tallest, labelExtent(labels[i]));
+    }
+    return Math.max(state.pad, Math.ceil(tallest) + 6);
+  }
+
   function marginFor(v, nodes, labels) {
     var margin = {
       l: state.marginX, r: state.marginX,
@@ -399,14 +419,14 @@
      a two-line wrapped label needs twice the room of a one-line one, and
      guessing on node count alone is what produced the old 6840px files that
      still had labels touching. */
-  function autoHeight(v, nodes, labels) {
+  function autoHeight(v, nodes, labels, pad) {
     var perColumn = {};
     nodes.forEach(function (name, i) {
       var d = v.depthOf[name];
       var need = labels[i]
-        ? Math.max(labelExtent(labels[i]), state.thickness) + state.pad
+        ? Math.max(labelExtent(labels[i]), state.thickness) + pad
         // an unlabelled node only needs to be visible, not readable
-        : Math.min(state.pad, 6) + 2;
+        : Math.min(pad, 6) + 2;
       perColumn[d] = (perColumn[d] || 0) + need;
     });
     var tallest = Math.max.apply(null, Object.keys(perColumn).map(function (k) {
@@ -434,7 +454,9 @@
     nodes.forEach(function (n, i) {
       extents[n] = labels[i] ? labelExtent(labels[i]) : 0;
     });
-    var height = state.autoHeight ? autoHeight(v, nodes, labels) : state.height;
+    var pad = effectivePad(labels);
+    var height = state.autoHeight ? autoHeight(v, nodes, labels, pad)
+                                  : state.height;
     var pos = positions(v, nodes, height - state.marginTop - 36, extents);
 
     var node = {
@@ -444,7 +466,7 @@
         return [esc(fullNameOf(n)), fmtAbs(pct)];
       }),
       color: nodes.map(function (n) { return nodeColor(n, v.depthOf[n]); }),
-      pad: state.pad,
+      pad: pad,
       thickness: state.thickness,
       align: state.align,
       line: {
@@ -586,9 +608,29 @@
            ',' + y + ')';
   }
 
+  /* Never restyle a half-drawn diagram.  Plotly removes the node groups of the
+     previous data set from an end-of-transition callback, and that transition
+     animates the very attribute we write — so touching `transform` while it is
+     running cancels it, the callback never fires, and the old nodes are left
+     stacked on top of the new ones.  Dropping the Levels slider from 4 to 3 on
+     a large tree left 215 stale labels piled over a 35-node diagram.
+
+     The node group count matching the figure we just built is the signal that
+     Plotly has finished; until it does, wait and look again. */
+  var styleRetry = null;
+
   function applyLabelStyling() {
-    var angle = state.labelAngle || 0;
+    if (styleRetry) { clearTimeout(styleRetry); styleRetry = null; }
+    if (!labelsRestyled()) return;      // nothing to do, so touch nothing
+
     var groups = gd.querySelectorAll('g.sankey-node');
+    var expected = lastFigure ? lastFigure.nodes.length : -1;
+    if (expected >= 0 && groups.length !== expected) {
+      styleRetry = setTimeout(applyLabelStyling, 60);
+      return;
+    }
+
+    var angle = state.labelAngle || 0;
     for (var i = 0; i < groups.length; i++) {
       var text = groups[i].querySelector('text.node-label');
       if (!text) continue;
@@ -642,7 +684,52 @@
 
   /* ── render ───────────────────────────────────────────────────────────── */
   var lastFigure = null;
-  var afterPlotBound = false;
+  var drawnSignature = null;
+
+  /* Re-attached after every full redraw, because newPlot purges the div's
+     listeners along with its old contents.  Miss this and node selection
+     silently stops working after the first data change. */
+  function bindPlotEvents() {
+    if (!gd.on) return;
+    gd.on('plotly_click', function (ev) {
+      var pt = ev && ev.points && ev.points[0];
+      if (!pt) return;
+      // Sankey node points carry link lists; link points carry source/target.
+      if (pt.sourceLinks === undefined && pt.targetLinks === undefined) return;
+      var nodes = lastFigure ? lastFigure.nodes : [];
+      var name = nodes[pt.index != null ? pt.index : pt.pointNumber];
+      if (name) {
+        selectNode(name);
+        $('group-node').open = true;
+      }
+    });
+    gd.on('plotly_relayout', syncFromRelayout);
+    gd.on('plotly_restyle', syncFromRestyle);
+    // catches the draws we do not drive ourselves — node drags, resizes
+    gd.on('plotly_afterplot', applyLabelStyling);
+  }
+
+  /* Plotly.react does not clear a Sankey's old node groups when the node set
+     changes under it: it removes them from an end-of-transition callback, and
+     a second react arriving before that callback runs strands them in the DOM
+     for good.  Dragging the Levels slider is exactly that — one render per
+     input event — and on a large tree it leaves hundreds of stale labels
+     piled over the real diagram, while the status bar honestly reports the
+     small number the pipeline produced.
+
+     Only a full redraw clears them reliably.  react is still what we want for
+     style-only changes, where it is worth keeping for the hover and drag state
+     it preserves, so the node set is what decides between the two. */
+  function draw(figure) {
+    var signature = figure.nodes.join('');
+    if (signature === drawnSignature) {
+      Plotly.react(gd, figure.data, figure.layout, figure.config);
+      return;
+    }
+    Plotly.newPlot(gd, figure.data, figure.layout, figure.config);
+    drawnSignature = signature;
+    bindPlotEvents();          // newPlot drops every listener on the div
+  }
 
   function render() {
     view = LCAFlows.buildFlows(PAYLOAD, {
@@ -658,6 +745,8 @@
       gd.innerHTML = '<p style="padding:32px;color:#898781">Nothing to draw at ' +
                      'these settings — raise the level count or lower the ' +
                      'threshold.</p>';
+      // the div no longer holds a plot, so the next draw has to build one
+      drawnSignature = null;
       updateStats();
       refreshInspector();
       buildKey();
@@ -666,13 +755,8 @@
     }
 
     lastFigure = buildFigure(view);
-    Plotly.react(gd, lastFigure.data, lastFigure.layout, lastFigure.config);
+    draw(lastFigure);
     applyLabelStyling();
-    if (!afterPlotBound && gd.on) {
-      // catches the draws we do not drive ourselves — node drags, resizes
-      afterPlotBound = true;
-      gd.on('plotly_afterplot', applyLabelStyling);
-    }
     updateStats();
     refreshInspector();
     buildKey();
@@ -1436,23 +1520,8 @@
   load();
   wire();
   applyStateToControls();
-  render();
+  render();                    // draw() binds the plot events on the first plot
   buildDepthColors();
-
-  gd.on('plotly_click', function (ev) {
-    var pt = ev && ev.points && ev.points[0];
-    if (!pt) return;
-    // Sankey node points carry link lists; link points carry source/target.
-    if (pt.sourceLinks === undefined && pt.targetLinks === undefined) return;
-    var nodes = lastFigure ? lastFigure.nodes : [];
-    var name = nodes[pt.index != null ? pt.index : pt.pointNumber];
-    if (name) {
-      selectNode(name);
-      $('group-node').open = true;
-    }
-  });
-  gd.on('plotly_relayout', syncFromRelayout);
-  gd.on('plotly_restyle', syncFromRestyle);
 
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
