@@ -54,7 +54,7 @@
       labelAngle: 0,             // degrees, clockwise; 0 = horizontal
       decimals: 1,
       // colours
-      theme: 'auto',
+      theme: global.__lcaTheme || 'auto',
       palette: 'legaci',
       depthColors: null,         // null = take from the palette preset
       linkMode: 'depth',
@@ -893,6 +893,7 @@
   }
 
   function afterThemeChange() {
+    global.__lcaTheme = state.theme;
     document.documentElement.setAttribute(
       'data-theme', state.theme === 'auto' ? '' : state.theme);
     state.depthColors = null;
@@ -908,6 +909,7 @@
   function wireBrandHeader() {
     var source = $('brand-source');
     if (source) source.textContent = META.source || '';
+    if (META.title) document.title = META.title + ' - openLCA Sankey';
 
     // the builders leave src empty when the mark is missing from gui_assets
     var logo = $('brand-logo');
@@ -1531,10 +1533,12 @@
     // panel visibility
     $('c-hidepanel').addEventListener('click', function () {
       document.body.classList.add('panel-hidden');
+      $('panel-toggle').setAttribute('aria-expanded', 'false');
       setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
     });
     $('panel-toggle').addEventListener('click', function () {
       document.body.classList.remove('panel-hidden');
+      this.setAttribute('aria-expanded', 'true');
       setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
     });
   }

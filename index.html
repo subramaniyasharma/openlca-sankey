@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive browser-based Sankey diagram viewer for openLCA contribution-tree exports.">
+<meta name="theme-color" content="#f9f9f7">
 <title>openLCA Sankey</title>
 <style>/* dashboard.css — shell and control panel for the Sankey dashboard.
    Colours are the data-viz chrome tokens; every value is declared under both
@@ -15,6 +17,7 @@
   --plane:        #f9f9f7;
   --ink:          #0b0b0b;
   --ink-2:        #52514e;
+  --ink-soft:     #6f6e69;
   --ink-muted:    #898781;
   --rule:         #e1e0d9;
   --border:       rgba(11, 11, 11, 0.10);
@@ -25,6 +28,7 @@
   --brand-soft:   rgba(47, 125, 79, 0.12);
   --header-bg:    #ffffff;
   --warn:         #b45309;
+  --negative:     #d03b3b;
   --shadow:       0 1px 2px rgba(11, 11, 11, 0.06), 0 8px 24px rgba(11, 11, 11, 0.06);
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --brand-sans: Carlito, Calibri, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -38,6 +42,7 @@
     --plane:       #0d0d0d;
     --ink:         #ffffff;
     --ink-2:       #c3c2b7;
+    --ink-soft:    #aaa99f;
     --ink-muted:   #898781;
     --rule:        #2c2c2a;
     --border:      rgba(255, 255, 255, 0.10);
@@ -48,6 +53,7 @@
     --brand-soft:  rgba(78, 158, 106, 0.18);
     --header-bg:   #131312;
     --warn:        #fab219;
+    --negative:    #ff7676;
     --shadow:      0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 }
@@ -58,6 +64,7 @@
   --plane:       #0d0d0d;
   --ink:         #ffffff;
   --ink-2:       #c3c2b7;
+  --ink-soft:    #aaa99f;
   --ink-muted:   #898781;
   --rule:        #2c2c2a;
   --border:      rgba(255, 255, 255, 0.10);
@@ -68,10 +75,55 @@
   --brand-soft:  rgba(78, 158, 106, 0.18);
   --header-bg:   #131312;
   --warn:        #fab219;
+  --negative:    #ff7676;
   --shadow:      0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 * { box-sizing: border-box; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  padding: 7px 10px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 5px;
+  transform: translateY(-160%);
+  transition: transform 0.12s ease;
+}
+.skip-link:focus { transform: translateY(0); }
+
+.noscript {
+  padding: 12px 16px;
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
 
 body {
   margin: 0;
@@ -174,8 +226,9 @@ body.panel-hidden .panel { display: none; }
   z-index: 2;
 }
 
-.panel-head h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+.panel-head h1, .panel-head h2 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
 .panel-head .meta { font-size: 11px; color: var(--ink-muted); margin-left: auto; }
+.panel-intro { padding: 10px 16px 4px; margin: 0; font-size: 12px; color: var(--ink-2); }
 
 details.group { border-bottom: 1px solid var(--rule); }
 
@@ -256,7 +309,8 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
   background: var(--field);
   color: var(--ink-2);
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  min-height: 30px;
 }
 .seg button:last-child { border-right: 0; }
 .seg button:hover { background: var(--accent-soft); }
@@ -271,6 +325,7 @@ button.btn {
   background: var(--field);
   color: var(--ink);
   cursor: pointer;
+  min-height: 30px;
 }
 button.btn:hover { background: var(--accent-soft); border-color: var(--accent); }
 button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -332,6 +387,18 @@ body:not(.panel-hidden) #panel-toggle { display: none; }
     border-top: 1px solid var(--rule);
     position: static;
   }
+  .stage { min-height: 52vh; }
+  .stage-bar { gap: 8px; padding: 8px 12px; }
+  .chart-scroll { padding: 4px; }
+}
+
+@media (max-width: 520px) {
+  .row:not(.stack) { align-items: flex-start; }
+  .row > label { flex-basis: 92px; }
+  .seg { flex-wrap: wrap; }
+  .seg button { flex: 1 1 30%; border-bottom: 1px solid var(--border); }
+  .seg button:nth-last-child(-n + 2) { border-bottom: 0; }
+  .btn-row > .btn { min-width: 112px; }
 }
 
 @media print {
@@ -451,7 +518,14 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
 </head>
 <body>
 
-<button id="panel-toggle" class="btn" type="button">Controls</button>
+<a class="skip-link" href="#chart">Skip to diagram</a>
+<noscript>
+  <div class="noscript" role="alert">
+    This dashboard needs JavaScript enabled to render and edit the Sankey diagram.
+  </div>
+</noscript>
+
+<button id="panel-toggle" class="btn" type="button" aria-controls="panel" aria-expanded="true">Controls</button>
 
 <!-- LEGACI brand header — from the Claude Design mockup. The logo is inlined
      as a data URI so a generated file still needs nothing from the network. -->
@@ -484,8 +558,9 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
   </div>
 </div>
 
-<div class="app">
-  <div class="stage">
+<main class="app" id="main-content">
+  <section class="stage" aria-labelledby="diagram-heading">
+    <h1 id="diagram-heading" class="sr-only">openLCA Sankey diagram</h1>
     <div class="stage-bar" id="source-bar" hidden>
       <span id="src-name"></span>
       <span class="sep">|</span>
@@ -498,7 +573,7 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
       <span class="spacer"></span>
       <button class="btn" type="button" id="src-open">Open another file…</button>
     </div>
-    <div class="stage-bar">
+    <div class="stage-bar" role="status" aria-live="polite" aria-atomic="true">
       <span id="stat-flows"></span>
       <span class="sep">|</span>
       <span id="stat-nodes"></span>
@@ -507,7 +582,8 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
       <span id="stat-gap"></span>
     </div>
     <div class="chart-scroll">
-      <div id="chart"></div>
+      <p id="chart-description" class="sr-only">Interactive Sankey diagram. Click a node to select it and edit its label, colour, or visibility in the controls panel.</p>
+      <div id="chart" role="img" aria-labelledby="diagram-heading" aria-describedby="chart-description"></div>
       <!-- shown only in numbered-label mode: the key that makes short numeric
            labels usable in a paper -->
       <section id="node-key" hidden>
@@ -518,13 +594,14 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
         <ol id="key-list"></ol>
       </section>
     </div>
-  </div>
+  </section>
 
-  <aside class="panel" id="panel">
+  <aside class="panel" id="panel" aria-labelledby="controls-heading">
     <div class="panel-head">
-      <h1>Diagram controls</h1>
+      <h2 id="controls-heading">Diagram controls</h2>
       <span class="meta" id="meta-source"></span>
     </div>
+    <p class="panel-intro">Tune the data, labels, colours, and layout. Changes are saved in this browser.</p>
 
     <!-- ── DATA ──────────────────────────────────────────────────────── -->
     <details class="group" open>
@@ -539,8 +616,8 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
         </div>
         <p class="hint" id="levels-hint"></p>
 
-        <div class="row stack">
-          <label>Small flows</label>
+        <div class="row stack" role="group" aria-labelledby="small-flows-label">
+          <label id="small-flows-label">Small flows</label>
           <div class="seg" id="c-small">
             <button type="button" data-value="all">Show all</button>
             <button type="button" data-value="pool">Pool into "other"</button>
@@ -567,8 +644,8 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
         <p class="hint">Keeps only the largest contributors, the way openLCA's
           own Sankey does. 0 keeps everything.</p>
 
-        <div class="row stack">
-          <label>Root balance</label>
+        <div class="row stack" role="group" aria-labelledby="root-balance-label">
+          <label id="root-balance-label">Root balance</label>
           <div class="seg" id="c-balance">
             <button type="button" data-value="off">Unbalanced</button>
             <button type="button" data-value="on">Add "direct + unresolved"</button>
@@ -661,8 +738,8 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
     <details class="group">
       <summary>Labels</summary>
       <div class="group-body">
-        <div class="row stack">
-          <label>Show</label>
+        <div class="row stack" role="group" aria-labelledby="label-mode-label">
+          <label id="label-mode-label">Show</label>
           <div class="seg" id="c-labelmode">
             <button type="button" data-value="name">Name</button>
             <button type="button" data-value="both">Name+%</button>
@@ -919,7 +996,7 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
         <p class="empty-note" id="inspector-empty">
           Click a node on the diagram to edit it.
         </p>
-        <div id="inspector" hidden>
+        <div id="inspector" role="region" aria-live="polite" aria-label="Selected node editor" hidden>
           <div class="inspector-name" id="i-full"></div>
           <div class="inspector-stat" id="i-stat"></div>
           <div class="row stack">
@@ -976,7 +1053,7 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
         <p class="hint">The preset switches to the print palette on a white
           ground with black text, and numbers the nodes with a key below the
           diagram.</p>
-        <p class="hint" id="save-note">Changes are remembered in this browser.</p>
+        <p class="hint" id="save-note" role="status" aria-live="polite">Changes are remembered in this browser.</p>
         <input type="file" id="c-loadfile" accept="application/json" hidden>
       </div>
     </details>
@@ -985,7 +1062,7 @@ body.dragging #drop-inner { outline: 2px dashed var(--accent, #2a78d6); outline-
       <button class="btn" type="button" id="c-hidepanel">Hide panel</button>
     </div>
   </aside>
-</div>
+</main>
 
 <!-- filled only when the page is opened with ?dumpFlows=1, so a headless
      browser can hand the JS pipeline's output to tools/verify_flows.py -->
@@ -1351,7 +1428,7 @@ var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#
       labelAngle: 0,             // degrees, clockwise; 0 = horizontal
       decimals: 1,
       // colours
-      theme: 'auto',
+      theme: global.__lcaTheme || 'auto',
       palette: 'legaci',
       depthColors: null,         // null = take from the palette preset
       linkMode: 'depth',
@@ -2190,6 +2267,7 @@ var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#
   }
 
   function afterThemeChange() {
+    global.__lcaTheme = state.theme;
     document.documentElement.setAttribute(
       'data-theme', state.theme === 'auto' ? '' : state.theme);
     state.depthColors = null;
@@ -2205,6 +2283,7 @@ var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#
   function wireBrandHeader() {
     var source = $('brand-source');
     if (source) source.textContent = META.source || '';
+    if (META.title) document.title = META.title + ' - openLCA Sankey';
 
     // the builders leave src empty when the mark is missing from gui_assets
     var logo = $('brand-logo');
@@ -2828,10 +2907,12 @@ var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#
     // panel visibility
     $('c-hidepanel').addEventListener('click', function () {
       document.body.classList.add('panel-hidden');
+      $('panel-toggle').setAttribute('aria-expanded', 'false');
       setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
     });
     $('panel-toggle').addEventListener('click', function () {
       document.body.classList.remove('panel-hidden');
+      this.setAttribute('aria-expanded', 'true');
       setTimeout(function () { Plotly.Plots.resize(gd); }, 50);
     });
   }
@@ -3546,6 +3627,42 @@ var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#
 
   function clearError() { $('drop-error').hidden = true; }
 
+  /* Keep the branded theme buttons useful before a workbook is opened.  The
+     dashboard controller takes over the same controls after start(), but the
+     drop screen must not leave them decorative. */
+  function paintBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    var mode = global.__lcaTheme || 'auto';
+    var active = mode === 'auto' && window.matchMedia
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : mode;
+    light.setAttribute('aria-pressed', active === 'light' ? 'true' : 'false');
+    dark.setAttribute('aria-pressed', active === 'dark' ? 'true' : 'false');
+  }
+
+  function setBrandTheme(mode) {
+    global.__lcaTheme = mode;
+    document.documentElement.setAttribute('data-theme', mode === 'auto' ? '' : mode);
+    paintBrandTheme();
+  }
+
+  function wireBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    light.addEventListener('click', function () { setBrandTheme('light'); });
+    dark.addEventListener('click', function () { setBrandTheme('dark'); });
+    paintBrandTheme();
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var onScheme = function () {
+        if ((global.__lcaTheme || 'auto') === 'auto') paintBrandTheme();
+      };
+      if (mq.addEventListener) mq.addEventListener('change', onScheme);
+      else if (mq.addListener) mq.addListener('change', onScheme);
+    }
+  }
+
   /* Rebuild the control panel from its original markup before each start.
      wire() attaches listeners to every control, and a second file would
      otherwise bind them twice over — dropping the nodes drops the listeners
@@ -3654,6 +3771,7 @@ var PALETTES = {"legaci":{"label":"LEGACI brand","light":["#2f7d4f","#b8912f","#
 
   /* ── wiring ───────────────────────────────────────────────────────────── */
   function wire() {
+    wireBrandTheme();
     var picker = $('drop-file');
     $('drop-pick').addEventListener('click', function () { picker.click(); });
     $('src-open').addEventListener('click', function () { picker.click(); });

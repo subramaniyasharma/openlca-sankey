@@ -3,13 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive browser-based Sankey diagram viewer for openLCA contribution-tree exports.">
+<meta name="theme-color" content="#f9f9f7">
 <title>{{TITLE}}</title>
 <style>/*{{CSS}}*/</style>
 <!--{{PLOTLY}}-->
 </head>
 <body>
 
-<button id="panel-toggle" class="btn" type="button">Controls</button>
+<a class="skip-link" href="#chart">Skip to diagram</a>
+<noscript>
+  <div class="noscript" role="alert">
+    This dashboard needs JavaScript enabled to render and edit the Sankey diagram.
+  </div>
+</noscript>
+
+<button id="panel-toggle" class="btn" type="button" aria-controls="panel" aria-expanded="true">Controls</button>
 
 <!-- LEGACI brand header — from the Claude Design mockup. The logo is inlined
      as a data URI so a generated file still needs nothing from the network. -->
@@ -42,8 +51,9 @@
   </div>
 </div>
 
-<div class="app">
-  <div class="stage">
+<main class="app" id="main-content">
+  <section class="stage" aria-labelledby="diagram-heading">
+    <h1 id="diagram-heading" class="sr-only">openLCA Sankey diagram</h1>
     <div class="stage-bar" id="source-bar" hidden>
       <span id="src-name"></span>
       <span class="sep">|</span>
@@ -56,7 +66,7 @@
       <span class="spacer"></span>
       <button class="btn" type="button" id="src-open">Open another file…</button>
     </div>
-    <div class="stage-bar">
+    <div class="stage-bar" role="status" aria-live="polite" aria-atomic="true">
       <span id="stat-flows"></span>
       <span class="sep">|</span>
       <span id="stat-nodes"></span>
@@ -65,7 +75,8 @@
       <span id="stat-gap"></span>
     </div>
     <div class="chart-scroll">
-      <div id="chart"></div>
+      <p id="chart-description" class="sr-only">Interactive Sankey diagram. Click a node to select it and edit its label, colour, or visibility in the controls panel.</p>
+      <div id="chart" role="img" aria-labelledby="diagram-heading" aria-describedby="chart-description"></div>
       <!-- shown only in numbered-label mode: the key that makes short numeric
            labels usable in a paper -->
       <section id="node-key" hidden>
@@ -76,13 +87,14 @@
         <ol id="key-list"></ol>
       </section>
     </div>
-  </div>
+  </section>
 
-  <aside class="panel" id="panel">
+  <aside class="panel" id="panel" aria-labelledby="controls-heading">
     <div class="panel-head">
-      <h1>Diagram controls</h1>
+      <h2 id="controls-heading">Diagram controls</h2>
       <span class="meta" id="meta-source"></span>
     </div>
+    <p class="panel-intro">Tune the data, labels, colours, and layout. Changes are saved in this browser.</p>
 
     <!-- ── DATA ──────────────────────────────────────────────────────── -->
     <details class="group" open>
@@ -97,8 +109,8 @@
         </div>
         <p class="hint" id="levels-hint"></p>
 
-        <div class="row stack">
-          <label>Small flows</label>
+        <div class="row stack" role="group" aria-labelledby="small-flows-label">
+          <label id="small-flows-label">Small flows</label>
           <div class="seg" id="c-small">
             <button type="button" data-value="all">Show all</button>
             <button type="button" data-value="pool">Pool into "other"</button>
@@ -125,8 +137,8 @@
         <p class="hint">Keeps only the largest contributors, the way openLCA's
           own Sankey does. 0 keeps everything.</p>
 
-        <div class="row stack">
-          <label>Root balance</label>
+        <div class="row stack" role="group" aria-labelledby="root-balance-label">
+          <label id="root-balance-label">Root balance</label>
           <div class="seg" id="c-balance">
             <button type="button" data-value="off">Unbalanced</button>
             <button type="button" data-value="on">Add "direct + unresolved"</button>
@@ -219,8 +231,8 @@
     <details class="group">
       <summary>Labels</summary>
       <div class="group-body">
-        <div class="row stack">
-          <label>Show</label>
+        <div class="row stack" role="group" aria-labelledby="label-mode-label">
+          <label id="label-mode-label">Show</label>
           <div class="seg" id="c-labelmode">
             <button type="button" data-value="name">Name</button>
             <button type="button" data-value="both">Name+%</button>
@@ -477,7 +489,7 @@
         <p class="empty-note" id="inspector-empty">
           Click a node on the diagram to edit it.
         </p>
-        <div id="inspector" hidden>
+        <div id="inspector" role="region" aria-live="polite" aria-label="Selected node editor" hidden>
           <div class="inspector-name" id="i-full"></div>
           <div class="inspector-stat" id="i-stat"></div>
           <div class="row stack">
@@ -534,7 +546,7 @@
         <p class="hint">The preset switches to the print palette on a white
           ground with black text, and numbers the nodes with a key below the
           diagram.</p>
-        <p class="hint" id="save-note">Changes are remembered in this browser.</p>
+        <p class="hint" id="save-note" role="status" aria-live="polite">Changes are remembered in this browser.</p>
         <input type="file" id="c-loadfile" accept="application/json" hidden>
       </div>
     </details>
@@ -543,7 +555,7 @@
       <button class="btn" type="button" id="c-hidepanel">Hide panel</button>
     </div>
   </aside>
-</div>
+</main>
 
 <!-- filled only when the page is opened with ?dumpFlows=1, so a headless
      browser can hand the JS pipeline's output to tools/verify_flows.py -->
