@@ -56,7 +56,11 @@
       borderWidth: 0.5,
       background: null,          // null = follow theme
       // layout
-      placement: 'weighted',
+      // Plotly's own Sankey layout is the one that keeps a child inside the
+      // span of the ribbon feeding it; the column-at-a-time placements below
+      // stack each column against its own total instead, which is what turns
+      // the near columns into a fan.  See README_sankey.md.
+      placement: 'auto',
       arrangement: 'snap',
       pad: 18,
       thickness: 18,
@@ -717,11 +721,28 @@
      piled over the real diagram, while the status bar honestly reports the
      small number the pipeline produced.
 
-     Only a full redraw clears them reliably.  react is still what we want for
-     style-only changes, where it is worth keeping for the hover and drag state
-     it preserves, so the node set is what decides between the two. */
+     react does not re-run the Sankey layout either: hand it new node.x /
+     node.y and it keeps the positions it worked out on the first draw, so
+     switching Placement appeared to do nothing at all until something else
+     happened to change the node count.
+
+     Only a full redraw fixes either one.  react is still what we want for
+     changes that touch nothing but paint, where it is worth keeping for the
+     hover and drag state it preserves — so the signature below covers the node
+     set and the geometry, and anything outside it stays on react. */
+  function figureSignature(figure) {
+    var node = figure.data[0].node;
+    var xy = '';
+    if (node.x && node.y) {
+      for (var i = 0; i < node.x.length; i++) {
+        xy += Math.round(node.x[i] * 1e4) + ',' + Math.round(node.y[i] * 1e4) + ';';
+      }
+    }
+    return figure.nodes.join('\u0001') + '|' + node.pad + '|' + xy;
+  }
+
   function draw(figure) {
-    var signature = figure.nodes.join('');
+    var signature = figureSignature(figure);
     if (signature === drawnSignature) {
       Plotly.react(gd, figure.data, figure.layout, figure.config);
       return;

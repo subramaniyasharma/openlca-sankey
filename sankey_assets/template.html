@@ -346,12 +346,18 @@
           <label for="c-placement">Placement</label>
           <div class="ctl">
             <select id="c-placement">
+              <option value="auto">Aligned to parent</option>
               <option value="weighted">Value-weighted columns</option>
               <option value="even">Even columns by depth</option>
-              <option value="auto">Auto (let Plotly decide)</option>
             </select>
           </div>
         </div>
+        <p class="hint"><b>Aligned</b> keeps each node inside the vertical span
+          of the ribbon feeding it, so the near columns read as straight bands.
+          The other two place each column against its own total instead, which
+          spreads a column over the full height and pulls children away from
+          their parents — useful for reading one column on its own, but it is
+          what turns the first levels into a fan.</p>
         <div class="row">
           <label for="c-arrangement">Dragging</label>
           <div class="ctl">

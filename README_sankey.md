@@ -50,7 +50,7 @@ labels](#restyled-labels) for why that needs its own code path.
 link colour by depth, source, target, magnitude or uniform; link opacity;
 negative-flow colour; node border; background.
 
-**Layout** — value-weighted / even / automatic node placement; snap, freeform,
+**Layout** — node placement (aligned to parent, value-weighted, even); snap, freeform,
 perpendicular or fixed dragging; node gap and width; height and width; margins.
 
 **Selected node** — click any node to rename it, recolour it, hide its label, or
@@ -158,12 +158,36 @@ tree it left *hundreds* of stale labels piled over the real diagram while the
 status bar honestly reported the small number the pipeline had produced. It
 looks like a rendering bug in the flow pipeline and is not one.
 
-`draw()` therefore compares the node set against the last one drawn and calls
-`Plotly.newPlot` when it has changed, keeping `react` for style-only updates
-where its preserved hover and drag state is worth having. `newPlot` purges the
-div's event listeners along with its contents, so `bindPlotEvents()` re-attaches
-them on every full redraw — miss that and node selection silently stops working
-after the first data change.
+`react` also never re-runs the Sankey layout: hand it new `node.x` / `node.y`
+and it keeps the positions it worked out on the first draw. Switching Placement
+therefore appeared to do nothing at all until something else happened to change
+the node count — which is exactly the sort of thing that makes a layout look
+unfixable when it is only unrefreshed.
+
+`draw()` therefore compares a signature covering the node set *and* the
+geometry against the last one drawn, and calls `Plotly.newPlot` when either has
+changed, keeping `react` for style-only updates where its preserved hover and
+drag state is worth having. `newPlot` purges the div's event listeners along
+with its contents, so `bindPlotEvents()` re-attaches them on every full
+redraw — miss that and node selection silently stops working after the first
+data change.
+
+### Placement, and why the default is Plotly's own
+
+The diagram opens on **Aligned to parent**, which is Plotly's own Sankey layout
+with no `x`/`y` supplied at all. It keeps a node inside the vertical span of the
+ribbon feeding it, so the near columns read as straight bands.
+
+The other two modes place each column against its own total and spread it over
+the full height. That is genuinely useful for reading one column on its own, but
+it also pulls children away from their parents: the same three depth-1 nodes sit
+at 566 / 819 / 1075 px under the aligned layout and at 615 / 1927 / 2584 under
+the value-weighted one. The second is the fan that made the first levels look
+broken, and it used to be the default.
+
+Worth stating plainly, since it cost a couple of wrong turns to establish: the
+alignment problem was never Plotly's. Its layout does the right thing, and the
+custom placement was overriding it.
 
 Related: `applyLabelStyling()` refuses to touch a half-drawn diagram at all. It
 writes to `transform`, which is the attribute those exit transitions animate, so
