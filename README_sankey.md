@@ -28,14 +28,23 @@ colour, title text, alignment and weight.
 
 **Labels** — name / name+% / % / **numbered** / none; short or full process name;
 wrap width; truncation; a label cutoff that silences hairline nodes without
-removing them; alignment; **orientation**; decimal places. Plus free-text
-annotations.
+removing them; alignment; **side**; **orientation**; decimal places. Plus
+free-text annotations.
 
-Orientation turns every node label about the point where it meets its node, in
-15° steps from −90° to +90°, so a narrow column can stand its labels upright
-instead of truncating them. The canvas grows to fit the turned block, and both
-the PNG and the SVG export come out rotated — see [Rotated
-labels](#rotated-labels) for why that needs its own code path.
+**Label side** decides which side of its node a label sits on. Plotly makes that
+call from the node's x position alone: anything past the middle of the figure
+gets its label turned *inward*. For a contribution tree that is exactly wrong —
+the deepest column is the one carrying the long ecoinvent names, and inward
+means straight over the diagram. `Always right of the node` puts the end nodes'
+labels out past the diagram and widens the right margin to hold them (capped at
+45% of the width, since clipping one long name beats leaving no room to draw).
+
+**Orientation** turns every node label about the point where it meets its node,
+in 15° steps from −90° to +90°, so a narrow column can stand its labels upright
+instead of truncating them. The canvas grows to fit the turned block.
+
+Both survive into the PNG and the SVG — see [Restyled
+labels](#restyled-labels) for why that needs its own code path.
 
 **Colours** — light/dark/auto; four depth palettes; a colour picker per depth;
 link colour by depth, source, target, magnitude or uniform; link opacity;
@@ -91,30 +100,53 @@ Labels are resolved once over the **whole** tree, not per level, so a node keeps
 its name as you move the Levels slider. The old script re-resolved per level, so
 the same process could be labelled differently at 2 levels than at 4.
 
-### Rotated labels
+### Restyled labels
 
-Plotly's Sankey has no label angle of its own, and there is no figure attribute
-to set. What it does give us is one `<text x="0" y="0">` per label carrying a
-`translate()` to the point where the label meets its node — so appending a
-`rotate()` to that transform turns the label about exactly the right pivot, and
-wrapped lines (tspans inside the same element) turn with it. `applyLabelAngle()`
-re-applies it after every draw, because Plotly rewrites the transform on each
-one, node drags included.
+Plotly's Sankey has no label angle at all, and no way to override which side a
+label takes. What it does give us is one `<text x="0" y="0">` per label carrying
+a `translate()` to the point where the label meets its node — so rewriting that
+transform (and `text-anchor`) moves the label to the other side, and appending a
+`rotate()` turns it about exactly the right pivot. Wrapped lines are tspans
+inside the same element, so they follow either way. `applyLabelStyling()`
+re-applies both after every draw, because Plotly rewrites the transform on each
+one, node drags included — side first, since it replaces the transform outright
+and would otherwise drop a `rotate()` already sitting on it.
+
+Forcing a side means paying for it in margin: Plotly reserves nothing for label
+text and will happily run a name off the edge of the figure. `labelRoom()`
+estimates the widest label in the outermost column and `marginFor()` hands that
+to the layout.
 
 The catch is export. `Plotly.toImage` does **not** photograph the live DOM: it
 rebuilds the figure from its spec into a throwaway div, which is a faithful copy
 of everything Plotly knows about and nothing it does not. A rotation that only
 exists in the SVG is therefore silently dropped from every PNG and SVG — the
-worst kind of bug for a publication figure. So when the labels are turned,
-`exportImage()` asks Plotly for the SVG *string*, runs the same rotation over it
-with `rotateLabelsInSvg()`, and then either saves that string or rasterises it
-through an `<img>` and a canvas the way Plotly's own PNG path does. At 0° the
-whole detour is skipped and Plotly's `downloadImage` is used unchanged.
+worst kind of bug for a publication figure. So when the labels are restyled,
+`exportImage()` asks Plotly for the SVG *string*, runs the same side flip and
+rotation over it with `restyleLabelsInSvg()`, and then either saves that string
+or rasterises it through an `<img>` and a canvas the way Plotly's own PNG path
+does. Left alone, the whole detour is skipped and Plotly's `downloadImage` is
+used unchanged.
 
-For the same reason the modebar camera is removed while the labels are turned:
-it calls Plotly's own `toImage` and cannot know about the rotation, so leaving
-it there would hand out a quietly un-rotated PNG. The panel's Export buttons are
-the rotation-aware path.
+For the same reason the modebar camera is removed while the labels are
+restyled: it calls Plotly's own `toImage` and cannot know about any of this, so
+leaving it there would hand out a quietly unstyled PNG. The panel's Export
+buttons are the aware path.
+
+### Label crowding
+
+`positions()` pushes the nodes of a column apart so their labels clear each
+other. It used to do that with one gap for the whole column, sized for a single
+line — so a column of twenty wrapped ecoinvent names got stacked 24px apart with
+32px of text in each, and the deepest column came out as a pile. The gap is now
+per-pair: two neighbours need half of each of their own label blocks between
+their centres, plus a fixed clearance, and a column that still cannot fit gets
+squeezed evenly rather than pushed off the bottom.
+
+Note that these positions are a request, not a command — Plotly re-packs the
+column from the top, so the drawn gaps track the requested ones without matching
+them exactly. Where a column is genuinely too dense for its height, the label
+cutoff and the wrap width are the real controls.
 
 `labelExtent()` sizes the canvas from the rotated bounding box
 (`h·cos θ + w·sin θ`) rather than the line count, so upright labels get the room

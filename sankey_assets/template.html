@@ -230,6 +230,21 @@
           </div>
         </div>
         <div class="row">
+          <label for="c-labelside">Label side</label>
+          <div class="ctl">
+            <select id="c-labelside">
+              <option value="auto">Automatic</option>
+              <option value="right">Always right of the node</option>
+              <option value="left">Always left of the node</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Plotly decides the side from the node's position alone,
+          so the deepest column — the one carrying the long ecoinvent names —
+          gets its labels turned inward, over the diagram.
+          <b>Always right</b> puts the end nodes' labels out past the diagram
+          and widens the margin to hold them.</p>
+        <div class="row">
           <label for="c-labelangle">Orientation</label>
           <div class="ctl">
             <input type="range" id="c-labelangle" min="-90" max="90" step="15">

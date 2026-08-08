@@ -13,6 +13,7 @@ research result without running a server.
 - Show, pool, or hide small flows relative to their parent.
 - Inspect unbalanced trees or add a direct-emissions/unresolved remainder.
 - Edit labels, colours, fonts, node positions, and annotations.
+- Push the end nodes' labels out to the right of the diagram instead of over it.
 - Turn node labels to any angle between −90° and +90°, exports included.
 - Export PNG, SVG, CSV, and reusable style settings.
 - Use a numbered publication view with a process key.

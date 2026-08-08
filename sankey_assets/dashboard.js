@@ -39,6 +39,7 @@
       truncate: 0,               // 0 = no truncation
       labelCutoff: 0,            // % below which a node goes unlabelled
       align: 'justify',
+      labelSide: 'auto',         // auto | right | left — which side of the node
       labelAngle: 0,             // degrees, clockwise; 0 = horizontal
       decimals: 1,
       // colours
@@ -200,7 +201,7 @@
   /* Even columns reproduce the original layout; value-weighted stacks each
      column by share so a column of forty hairlines no longer demands 1400px
      of height.  A push-apart pass keeps the tiniest nodes from colliding. */
-  function positions(v, nodes, innerHeight) {
+  function positions(v, nodes, innerHeight, extents) {
     if (state.placement === 'auto') return null;
 
     var byDepth = {};
@@ -233,12 +234,35 @@
           cum += w;
           return mid;
         });
-        // Push apart by however much room a label actually needs, in fractions
-        // of the plot height — a fixed 2% collided as soon as labels wrapped.
-        var gap = (state.labelSize * 1.5 + 6) / Math.max(innerHeight, 1);
-        if (gap * column.length > 0.98) gap = 0.98 / Math.max(column.length, 1);
-        for (var i = 1; i < raw.length; i++) {
-          if (raw[i] < raw[i - 1] + gap) raw[i] = raw[i - 1] + gap;
+        // Push apart by however much room each label actually needs.  This used
+        // to be one gap for the whole column, sized for a single line — so a
+        // column of twenty wrapped ecoinvent names stacked them 24px apart with
+        // 32px of text in each, and the last column came out as a pile of
+        // overlapping labels.  Two neighbours need half of each of their own
+        // blocks between their centres, not a constant.
+        var span = Math.max(innerHeight, 1);
+        var room = column.map(function (n) {
+          return Math.max((extents && extents[n]) || 0, state.thickness);
+        });
+        // Clearance on top of the two half-blocks.  labelExtent counts line
+        // advances in ems, which lands a few px under the box the browser
+        // actually draws (the first line's ascent and the last one's descent
+        // sit outside the advance), so measured neighbours still touched at 6.
+        var CLEARANCE = 10;
+        var gaps = [];
+        var wanted = 0;
+        for (var i = 1; i < column.length; i++) {
+          var g = (room[i - 1] + room[i]) / 2 + CLEARANCE;
+          gaps.push(g);
+          wanted += g;
+        }
+        // A column that cannot hold its labels at full size gets them evenly
+        // squeezed rather than pushed off the bottom; the label cutoff and the
+        // wrap width are the real fixes and the status bar says so.
+        var squeeze = wanted > span * 0.98 ? (span * 0.98) / wanted : 1;
+        for (i = 1; i < raw.length; i++) {
+          var need = gaps[i - 1] * squeeze / span;
+          if (raw[i] < raw[i - 1] + need) raw[i] = raw[i - 1] + need;
         }
         var over = raw[raw.length - 1] - 1;
         if (over > 0) {
@@ -324,6 +348,53 @@
     return blockH * Math.cos(rad) + blockW * Math.sin(rad);
   }
 
+  /* Horizontal room the outermost column's labels need once they are pushed
+     outside their nodes.  Plotly reserves nothing for label text — it lets the
+     names run off the edge of the figure — so forcing a side means widening
+     the margin to match.  Capped at 45% of the width: on a narrow window it is
+     better to clip a long name than to leave no room for the diagram. */
+  function labelRoom(v, nodes, labels) {
+    var edge = 0;
+    nodes.forEach(function (n) { edge = Math.max(edge, v.depthOf[n]); });
+    if (state.labelSide === 'left') edge = 0;
+
+    var widest = 0, tallest = 1;
+    nodes.forEach(function (name, i) {
+      if (v.depthOf[name] !== edge || !labels[i]) return;
+      var lines = labels[i].split('<br>');
+      tallest = Math.max(tallest, lines.length);
+      for (var j = 0; j < lines.length; j++) {
+        widest = Math.max(widest, lines[j].length);
+      }
+    });
+    if (!widest) return state.marginX;
+
+    // Turned labels lie down, so the room they need swaps between the axes —
+    // the same box the height estimate uses, read the other way round.
+    var rad = Math.abs(state.labelAngle || 0) * Math.PI / 180;
+    var blockW = widest * state.labelSize * 0.55;
+    var blockH = tallest * state.labelSize * 1.3;
+    var wide = blockW * Math.cos(rad) + blockH * Math.sin(rad);
+
+    var figureWidth = state.fitWidth ? (gd.clientWidth || state.width)
+                                     : state.width;
+    return Math.min(wide + state.thickness + 12,
+                    Math.max(80, figureWidth * 0.45));
+  }
+
+  function marginFor(v, nodes, labels) {
+    var margin = {
+      l: state.marginX, r: state.marginX,
+      t: state.marginTop, b: 36
+    };
+    if (state.labelSide === 'right') {
+      margin.r = Math.max(margin.r, labelRoom(v, nodes, labels));
+    } else if (state.labelSide === 'left') {
+      margin.l = Math.max(margin.l, labelRoom(v, nodes, labels));
+    }
+    return margin;
+  }
+
   /* Size to the tallest column's actual label stack, not just its node count:
      a two-line wrapped label needs twice the room of a one-line one, and
      guessing on node count alone is what produced the old 6840px files that
@@ -359,8 +430,12 @@
     // labels first: both the height and the node spacing depend on how many
     // lines each one wraps to
     var labels = nodes.map(function (n) { return labelFor(n, v); });
+    var extents = {};
+    nodes.forEach(function (n, i) {
+      extents[n] = labels[i] ? labelExtent(labels[i]) : 0;
+    });
     var height = state.autoHeight ? autoHeight(v, nodes, labels) : state.height;
-    var pos = positions(v, nodes, height - state.marginTop - 36);
+    var pos = positions(v, nodes, height - state.marginTop - 36, extents);
 
     var node = {
       label: labels,
@@ -420,10 +495,7 @@
       hoverlabel: { font: { family: state.font, size: state.hoverSize } },
       paper_bgcolor: surface,
       plot_bgcolor: surface,
-      margin: {
-        l: state.marginX, r: state.marginX,
-        t: state.marginTop, b: 36
-      },
+      margin: marginFor(v, nodes, labels),
       height: height,
       annotations: state.annotations.map(function (a) {
         return {
@@ -464,7 +536,7 @@
       // buttons go through the rotation-aware path below.
       modeBarButtonsToRemove: ['lasso2d', 'select2d', 'zoom2d', 'pan2d',
                                'zoomIn2d', 'zoomOut2d', 'autoScale2d']
-                              .concat(state.labelAngle ? ['toImage'] : []),
+                              .concat(labelsRestyled() ? ['toImage'] : []),
       toImageButtonOptions: {
         format: 'png',
         filename: (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey',
@@ -490,30 +562,81 @@
     return angle ? (clean + ' rotate(' + angle + ')') : clean;
   }
 
-  function applyLabelAngle() {
+  /* Which side of its node a label sits on is Plotly's decision, and it makes
+     it on x alone: past the middle of the figure the label flips inward. For a
+     contribution tree that is the wrong call — the deepest column is where the
+     long ecoinvent names are, and inward means straight over the diagram. So
+     the side is overridable, and buildFigure widens the margin to receive it. */
+  var TEXT_PAD = 3.25;                 // Plotly's own gap between node and text
+
+  function sideTransform(group, text) {
+    var side = state.labelSide;
+    if (side !== 'right' && side !== 'left') return null;
+    var rect = group.querySelector('rect.node-rect');
+    var w = rect ? parseFloat(rect.getAttribute('width')) : NaN;
+    if (!(w > 0)) w = state.thickness;
+    var m = /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/.exec(
+      text.getAttribute('transform') || '');
+    var y = m ? m[2] : '0';
+    text.setAttribute('text-anchor', side === 'right' ? 'start' : 'end');
+    // the tspans of a wrapped label are positioned relative to the anchor
+    var spans = text.querySelectorAll('tspan');
+    for (var i = 0; i < spans.length; i++) spans[i].setAttribute('x', '0');
+    return 'translate(' + (side === 'right' ? (w + TEXT_PAD) : -TEXT_PAD) +
+           ',' + y + ')';
+  }
+
+  function applyLabelStyling() {
     var angle = state.labelAngle || 0;
-    var texts = gd.querySelectorAll('text.node-label');
-    for (var i = 0; i < texts.length; i++) {
-      texts[i].setAttribute(
-        'transform', angleTransform(texts[i].getAttribute('transform'), angle));
+    var groups = gd.querySelectorAll('g.sankey-node');
+    for (var i = 0; i < groups.length; i++) {
+      var text = groups[i].querySelector('text.node-label');
+      if (!text) continue;
+      // side first: it rewrites the transform outright, which would drop a
+      // rotate() already sitting on it
+      var base = sideTransform(groups[i], text) ||
+                 text.getAttribute('transform');
+      text.setAttribute('transform', angleTransform(base, angle));
     }
   }
 
-  /* Same rotation, applied to an exported SVG string.  Export cannot reuse the
-     live DOM: Plotly.toImage redraws the figure from its spec into a throwaway
-     div, which is a faithful copy of everything Plotly knows about and nothing
-     it doesn't.  Both export paths therefore patch the string instead. */
-  function rotateLabelsInSvg(svgText) {
+  function labelsRestyled() {
+    return state.labelSide === 'right' || state.labelSide === 'left' ||
+           !!state.labelAngle;
+  }
+
+  /* The same two moves, applied to an exported SVG string.  Export cannot reuse
+     the live DOM: Plotly.toImage redraws the figure from its spec into a
+     throwaway div, which is a faithful copy of everything Plotly knows about
+     and nothing it doesn't.  Both export paths therefore patch the string. */
+  function restyleLabelsInSvg(svgText) {
+    var side = state.labelSide;
     var angle = state.labelAngle || 0;
-    if (!angle) return svgText;
+    if (!labelsRestyled()) return svgText;
+    var flip = side === 'right' || side === 'left';
+    var x = side === 'right' ? (state.thickness + TEXT_PAD) : -TEXT_PAD;
+
     return svgText.replace(/<text\b[^>]*>/g, function (tag) {
       if (tag.indexOf('node-label') < 0) return tag;
-      if (/\stransform="/.test(tag)) {
-        return tag.replace(/\stransform="([^"]*)"/, function (all, tf) {
-          return ' transform="' + angleTransform(tf, angle) + '"';
+      var out = tag;
+      if (flip) {
+        out = out.replace(/text-anchor="[^"]*"/,
+                          'text-anchor="' + (side === 'right' ? 'start' : 'end') + '"');
+        out = out.replace(/\stransform="([^"]*)"/, function (all, tf) {
+          var m = /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/.exec(tf);
+          return ' transform="translate(' + x + ',' + (m ? m[2] : '0') + ')"';
         });
       }
-      return tag.replace(/<text\b/, '<text transform="rotate(' + angle + ')"');
+      if (angle) {
+        if (/\stransform="/.test(out)) {
+          out = out.replace(/\stransform="([^"]*)"/, function (all, tf) {
+            return ' transform="' + angleTransform(tf, angle) + '"';
+          });
+        } else {
+          out = out.replace(/<text\b/, '<text transform="rotate(' + angle + ')"');
+        }
+      }
+      return out;
     });
   }
 
@@ -544,11 +667,11 @@
 
     lastFigure = buildFigure(view);
     Plotly.react(gd, lastFigure.data, lastFigure.layout, lastFigure.config);
-    applyLabelAngle();
+    applyLabelStyling();
     if (!afterPlotBound && gd.on) {
       // catches the draws we do not drive ourselves — node drags, resizes
       afterPlotBound = true;
-      gd.on('plotly_afterplot', applyLabelAngle);
+      gd.on('plotly_afterplot', applyLabelStyling);
     }
     updateStats();
     refreshInspector();
@@ -947,7 +1070,7 @@
     }
 
     // Nothing to patch when the labels are level — keep Plotly's own path.
-    if (!state.labelAngle) return plotlyDownload();
+    if (!labelsRestyled()) return plotlyDownload();
 
     function giveUp() {
       $('save-note').textContent =
@@ -957,7 +1080,7 @@
 
     Plotly.toImage(gd, { format: 'svg', width: width, height: height })
       .then(function (uri) {
-        var svg = rotateLabelsInSvg(
+        var svg = restyleLabelsInSvg(
           decodeURIComponent(uri.replace(/^data:image\/svg\+xml,/, '')));
         if (format === 'svg') {
           download(baseName() + '.svg', svg, 'image/svg+xml');
@@ -1092,6 +1215,7 @@
       return v ? v.toFixed(1) + '%' : 'all';
     });
     bindSelect('c-align', 'align');
+    bindSelect('c-labelside', 'labelSide');
     bindRange('c-labelangle', 'labelAngle', function (v) {
       return (v > 0 ? '+' : '') + v + '°';
     });
@@ -1277,6 +1401,7 @@
       ['c-margintop', 'marginTop'], ['c-scale', 'scale'],
       ['c-font', 'font'], ['c-titlealign', 'titleAlign'],
       ['c-labelsource', 'labelSource'], ['c-align', 'align'],
+      ['c-labelside', 'labelSide'],
       ['c-theme', 'theme'], ['c-palette', 'palette'],
       ['c-linkmode', 'linkMode'], ['c-placement', 'placement'],
       ['c-arrangement', 'arrangement']
