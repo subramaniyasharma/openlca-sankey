@@ -11,8 +11,51 @@
 
 <button id="panel-toggle" class="btn" type="button">Controls</button>
 
+<!-- LEGACI brand header — from the Claude Design mockup. The logo is inlined
+     as a data URI so a generated file still needs nothing from the network. -->
+<header id="brand-header">
+  <img id="brand-logo" src="{{LOGO}}" alt="LEGACI">
+  <div id="brand-titles">
+    <div id="brand-name">LCA-Sankey Tool</div>
+    <div id="brand-lab">Laboratory for Eco-design, Green Chemistry and Circular Innovation</div>
+  </div>
+  <div id="brand-spacer"></div>
+  <span id="brand-tag">Open source</span>
+  <div id="brand-theme">
+    <button type="button" id="brand-light" aria-pressed="false">Light</button>
+    <button type="button" id="brand-dark" aria-pressed="false">Dark</button>
+  </div>
+  <span id="brand-source"></span>
+</header>
+
+<!-- The drop-in build turns these on; a per-workbook build leaves them hidden
+     and the markup costs it nothing. -->
+<div id="drop" hidden>
+  <div id="drop-inner">
+    <h1>openLCA Sankey</h1>
+    <p>Drop a contribution-tree <b>.xlsx</b> here</p>
+    <p><button class="btn" type="button" id="drop-pick">Choose a file…</button></p>
+    <input type="file" id="drop-file" accept=".xlsx" hidden>
+    <p id="drop-note">Everything is read and drawn in this browser. The file is
+      never uploaded.</p>
+    <p id="drop-error" hidden></p>
+  </div>
+</div>
+
 <div class="app">
   <div class="stage">
+    <div class="stage-bar" id="source-bar" hidden>
+      <span id="src-name"></span>
+      <span class="sep">|</span>
+      <label for="src-sheet">Sheet</label>
+      <select id="src-sheet"></select>
+      <label for="src-maxdepth">Depth</label>
+      <input type="number" id="src-maxdepth" min="1" max="10" step="1" value="6">
+      <label for="src-payloadmin">Drop below %</label>
+      <input type="number" id="src-payloadmin" min="0" max="100" step="0.1" value="0">
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="src-open">Open another file…</button>
+    </div>
     <div class="stage-bar">
       <span id="stat-flows"></span>
       <span class="sep">|</span>
@@ -230,6 +273,32 @@
           </div>
         </div>
         <div class="row">
+          <label for="c-labelside">Label side</label>
+          <div class="ctl">
+            <select id="c-labelside">
+              <option value="auto">Automatic</option>
+              <option value="right">Always right of the node</option>
+              <option value="left">Always left of the node</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Plotly decides the side from the node's position alone,
+          so the deepest column — the one carrying the long ecoinvent names —
+          gets its labels turned inward, over the diagram.
+          <b>Always right</b> puts the end nodes' labels out past the diagram
+          and widens the margin to hold them.</p>
+        <div class="row">
+          <label for="c-labelangle">Orientation</label>
+          <div class="ctl">
+            <input type="range" id="c-labelangle" min="-90" max="90" step="15">
+            <span class="val" id="v-labelangle"></span>
+          </div>
+        </div>
+        <p class="hint">Turns every node label about the point where it meets
+          its node. ±90° stands them upright, which is what a narrow column
+          wants; the canvas grows to make room. Also applied to the exported
+          PNG and SVG.</p>
+        <div class="row">
           <label for="c-decimals">Decimals</label>
           <div class="ctl">
             <input type="range" id="c-decimals" min="0" max="3" step="1">
@@ -320,12 +389,18 @@
           <label for="c-placement">Placement</label>
           <div class="ctl">
             <select id="c-placement">
+              <option value="auto">Aligned to parent</option>
               <option value="weighted">Value-weighted columns</option>
               <option value="even">Even columns by depth</option>
-              <option value="auto">Auto (let Plotly decide)</option>
             </select>
           </div>
         </div>
+        <p class="hint"><b>Aligned</b> keeps each node inside the vertical span
+          of the ribbon feeding it, so the near columns read as straight bands.
+          The other two place each column against its own total instead, which
+          spreads a column over the full height and pulls children away from
+          their parents — useful for reading one column on its own, but it is
+          what turns the first levels into a fan.</p>
         <div class="row">
           <label for="c-arrangement">Dragging</label>
           <div class="ctl">
@@ -481,5 +556,9 @@ var PALETTES = "{{PALETTES}}";
 </script>
 <script type="text/javascript">/*{{FLOWS_JS}}*/</script>
 <script type="text/javascript">/*{{DASHBOARD_JS}}*/</script>
+<!-- empty in a per-workbook build, which already has its data -->
+<script type="text/javascript">/*{{XLSX_JS}}*/</script>
+<script type="text/javascript">/*{{PARSE_JS}}*/</script>
+<script type="text/javascript">/*{{APP_JS}}*/</script>
 </body>
 </html>

@@ -13,9 +13,12 @@ venv/
 *.xls
 dashboard.html
 dashboard_*.html
+dash_*.html
 sankey_diagram.html
 sankey_diagram_*.html
 *-sankey.html
+# build output of build_app.py — rebuild it, don't commit 5 MB of Plotly
+sankey_app.html
 
 # Editor and operating-system files
 .DS_Store

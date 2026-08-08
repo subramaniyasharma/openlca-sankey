@@ -2,13 +2,24 @@
  * dashboard.js — controls, figure building and export for the Sankey dashboard.
  *
  * Reads the inlined PAYLOAD/INITIAL/PALETTES globals, runs LCAFlows.buildFlows
- * on every data change, and re-renders through Plotly.react so drags and hover
- * state survive.  Written in ES5 so the generated file works in older browsers
- * and can be exercised by a plain script host during verification.
+ * on every data change, and re-renders through Plotly.react when only the
+ * styling moved — which keeps drag and hover state — or Plotly.newPlot when the
+ * node set itself changed, which is the only way to stop Plotly stranding the
+ * previous set's nodes in the DOM.  Written in ES5 so the generated file works
+ * in older browsers and can be exercised by a plain script host.
  */
-(function () {
+(function (global) {
   'use strict';
 
+  /* Each start() supersedes the one before it.  A dropped file rebuilds the
+     control panel from scratch, which drops that panel's listeners with the
+     nodes they were on, but a previous instance can still be holding a theme
+     listener or a pending retry — so every closure checks that it is still the
+     current generation before it draws anything. */
+  var generation = 0;
+
+  function start(PAYLOAD, INITIAL, PALETTES) {
+  var myGeneration = ++generation;
   var gd = document.getElementById('chart');
   var META = PAYLOAD.meta || {};
   var STORE_KEY = 'lca-sankey:' + (META.source || 'default');
@@ -39,10 +50,12 @@
       truncate: 0,               // 0 = no truncation
       labelCutoff: 0,            // % below which a node goes unlabelled
       align: 'justify',
+      labelSide: 'auto',         // auto | right | left — which side of the node
+      labelAngle: 0,             // degrees, clockwise; 0 = horizontal
       decimals: 1,
       // colours
       theme: 'auto',
-      palette: 'categorical',
+      palette: 'legaci',
       depthColors: null,         // null = take from the palette preset
       linkMode: 'depth',
       linkColor: '#2a78d6',
@@ -52,7 +65,11 @@
       borderWidth: 0.5,
       background: null,          // null = follow theme
       // layout
-      placement: 'weighted',
+      // Plotly's own Sankey layout is the one that keeps a child inside the
+      // span of the ribbon feeding it; the column-at-a-time placements below
+      // stack each column against its own total instead, which is what turns
+      // the near columns into a fan.  See README_sankey.md.
+      placement: 'auto',
       arrangement: 'snap',
       pad: 18,
       thickness: 18,
@@ -199,7 +216,7 @@
   /* Even columns reproduce the original layout; value-weighted stacks each
      column by share so a column of forty hairlines no longer demands 1400px
      of height.  A push-apart pass keeps the tiniest nodes from colliding. */
-  function positions(v, nodes, innerHeight) {
+  function positions(v, nodes, innerHeight, extents) {
     if (state.placement === 'auto') return null;
 
     var byDepth = {};
@@ -232,12 +249,35 @@
           cum += w;
           return mid;
         });
-        // Push apart by however much room a label actually needs, in fractions
-        // of the plot height — a fixed 2% collided as soon as labels wrapped.
-        var gap = (state.labelSize * 1.5 + 6) / Math.max(innerHeight, 1);
-        if (gap * column.length > 0.98) gap = 0.98 / Math.max(column.length, 1);
-        for (var i = 1; i < raw.length; i++) {
-          if (raw[i] < raw[i - 1] + gap) raw[i] = raw[i - 1] + gap;
+        // Push apart by however much room each label actually needs.  This used
+        // to be one gap for the whole column, sized for a single line — so a
+        // column of twenty wrapped ecoinvent names stacked them 24px apart with
+        // 32px of text in each, and the last column came out as a pile of
+        // overlapping labels.  Two neighbours need half of each of their own
+        // blocks between their centres, not a constant.
+        var span = Math.max(innerHeight, 1);
+        var room = column.map(function (n) {
+          return Math.max((extents && extents[n]) || 0, state.thickness);
+        });
+        // Clearance on top of the two half-blocks.  labelExtent counts line
+        // advances in ems, which lands a few px under the box the browser
+        // actually draws (the first line's ascent and the last one's descent
+        // sit outside the advance), so measured neighbours still touched at 6.
+        var CLEARANCE = 10;
+        var gaps = [];
+        var wanted = 0;
+        for (var i = 1; i < column.length; i++) {
+          var g = (room[i - 1] + room[i]) / 2 + CLEARANCE;
+          gaps.push(g);
+          wanted += g;
+        }
+        // A column that cannot hold its labels at full size gets them evenly
+        // squeezed rather than pushed off the bottom; the label cutoff and the
+        // wrap width are the real fixes and the status bar says so.
+        var squeeze = wanted > span * 0.98 ? (span * 0.98) / wanted : 1;
+        for (i = 1; i < raw.length; i++) {
+          var need = gaps[i - 1] * squeeze / span;
+          if (raw[i] < raw[i - 1] + need) raw[i] = raw[i - 1] + need;
         }
         var over = raw[raw.length - 1] - 1;
         if (over > 0) {
@@ -303,19 +343,103 @@
     });
   }
 
+  /* Vertical room a label block occupies once it is turned by labelAngle.
+     Un-rotated this is just the line stack, so a horizontal diagram sizes
+     exactly as it did before the orientation control existed; turned towards
+     the vertical the block's *width* is what starts eating the column, which
+     is why a rotated diagram needs a taller canvas rather than the same one. */
+  function labelExtent(label) {
+    var lines = label.split('<br>');
+    var longest = 0;
+    for (var i = 0; i < lines.length; i++) {
+      longest = Math.max(longest, lines[i].length);
+    }
+    var blockH = lines.length * state.labelSize * 1.3;
+    if (!state.labelAngle) return blockH;
+    // ~0.55 em per character is the usual average for a proportional face; the
+    // figure only has to be close enough to keep neighbours from touching.
+    var blockW = longest * state.labelSize * 0.55;
+    var rad = Math.abs(state.labelAngle) * Math.PI / 180;
+    return blockH * Math.cos(rad) + blockW * Math.sin(rad);
+  }
+
+  /* Horizontal room the outermost column's labels need once they are pushed
+     outside their nodes.  Plotly reserves nothing for label text — it lets the
+     names run off the edge of the figure — so forcing a side means widening
+     the margin to match.  Capped at 45% of the width: on a narrow window it is
+     better to clip a long name than to leave no room for the diagram. */
+  function labelRoom(v, nodes, labels) {
+    var edge = 0;
+    nodes.forEach(function (n) { edge = Math.max(edge, v.depthOf[n]); });
+    if (state.labelSide === 'left') edge = 0;
+
+    var widest = 0, tallest = 1;
+    nodes.forEach(function (name, i) {
+      if (v.depthOf[name] !== edge || !labels[i]) return;
+      var lines = labels[i].split('<br>');
+      tallest = Math.max(tallest, lines.length);
+      for (var j = 0; j < lines.length; j++) {
+        widest = Math.max(widest, lines[j].length);
+      }
+    });
+    if (!widest) return state.marginX;
+
+    // Turned labels lie down, so the room they need swaps between the axes —
+    // the same box the height estimate uses, read the other way round.
+    var rad = Math.abs(state.labelAngle || 0) * Math.PI / 180;
+    var blockW = widest * state.labelSize * 0.55;
+    var blockH = tallest * state.labelSize * 1.3;
+    var wide = blockW * Math.cos(rad) + blockH * Math.sin(rad);
+
+    var figureWidth = state.fitWidth ? (gd.clientWidth || state.width)
+                                     : state.width;
+    return Math.min(wide + state.thickness + 12,
+                    Math.max(80, figureWidth * 0.45));
+  }
+
+  /* Plotly's Sankey lays each column out itself and treats node.y as a hint —
+     ask for 41px between two nodes in a dense column and it will still draw
+     them 18px apart.  What it does honour is node.pad, the minimum gap it
+     leaves between node rectangles.  So the room a label needs has to be
+     expressed as pad, or a column of wrapped ecoinvent names collapses to the
+     default gap and the labels sit on top of each other no matter what
+     positions() asked for.
+
+     The Node gap control stays the floor; this only ever raises it, and only
+     as far as the tallest label actually on the diagram. */
+  function effectivePad(labels) {
+    var tallest = 0;
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i]) tallest = Math.max(tallest, labelExtent(labels[i]));
+    }
+    return Math.max(state.pad, Math.ceil(tallest) + 6);
+  }
+
+  function marginFor(v, nodes, labels) {
+    var margin = {
+      l: state.marginX, r: state.marginX,
+      t: state.marginTop, b: 36
+    };
+    if (state.labelSide === 'right') {
+      margin.r = Math.max(margin.r, labelRoom(v, nodes, labels));
+    } else if (state.labelSide === 'left') {
+      margin.l = Math.max(margin.l, labelRoom(v, nodes, labels));
+    }
+    return margin;
+  }
+
   /* Size to the tallest column's actual label stack, not just its node count:
      a two-line wrapped label needs twice the room of a one-line one, and
      guessing on node count alone is what produced the old 6840px files that
      still had labels touching. */
-  function autoHeight(v, nodes, labels) {
+  function autoHeight(v, nodes, labels, pad) {
     var perColumn = {};
     nodes.forEach(function (name, i) {
       var d = v.depthOf[name];
       var need = labels[i]
-        ? Math.max(labels[i].split('<br>').length * state.labelSize * 1.3,
-                   state.thickness) + state.pad
+        ? Math.max(labelExtent(labels[i]), state.thickness) + pad
         // an unlabelled node only needs to be visible, not readable
-        : Math.min(state.pad, 6) + 2;
+        : Math.min(pad, 6) + 2;
       perColumn[d] = (perColumn[d] || 0) + need;
     });
     var tallest = Math.max.apply(null, Object.keys(perColumn).map(function (k) {
@@ -339,8 +463,14 @@
     // labels first: both the height and the node spacing depend on how many
     // lines each one wraps to
     var labels = nodes.map(function (n) { return labelFor(n, v); });
-    var height = state.autoHeight ? autoHeight(v, nodes, labels) : state.height;
-    var pos = positions(v, nodes, height - state.marginTop - 36);
+    var extents = {};
+    nodes.forEach(function (n, i) {
+      extents[n] = labels[i] ? labelExtent(labels[i]) : 0;
+    });
+    var pad = effectivePad(labels);
+    var height = state.autoHeight ? autoHeight(v, nodes, labels, pad)
+                                  : state.height;
+    var pos = positions(v, nodes, height - state.marginTop - 36, extents);
 
     var node = {
       label: labels,
@@ -349,7 +479,7 @@
         return [esc(fullNameOf(n)), fmtAbs(pct)];
       }),
       color: nodes.map(function (n) { return nodeColor(n, v.depthOf[n]); }),
-      pad: state.pad,
+      pad: pad,
       thickness: state.thickness,
       align: state.align,
       line: {
@@ -400,16 +530,17 @@
       hoverlabel: { font: { family: state.font, size: state.hoverSize } },
       paper_bgcolor: surface,
       plot_bgcolor: surface,
-      margin: {
-        l: state.marginX, r: state.marginX,
-        t: state.marginTop, b: 36
-      },
+      margin: marginFor(v, nodes, labels),
       height: height,
       annotations: state.annotations.map(function (a) {
         return {
           text: a.text, x: a.x, y: a.y,
           xref: 'paper', yref: 'paper',
           showarrow: false,
+          // annotations carry their own angle — a label detached while the
+          // diagram was turned keeps the orientation it was detached at, and
+          // later moves of the Orientation slider leave it where it was put
+          textangle: a.angle || 0,
           font: { family: state.font, size: a.size || state.labelSize,
                   color: a.color || ink },
           align: 'left',
@@ -433,8 +564,14 @@
       },
       displaylogo: false,
       scrollZoom: false,
+      // The modebar camera calls Plotly's own toImage, which rebuilds the
+      // figure from its spec and so cannot know about a label rotation that
+      // lives in the SVG.  Rather than let it hand out a silently un-rotated
+      // PNG, take it away while the labels are turned: the panel's Export
+      // buttons go through the rotation-aware path below.
       modeBarButtonsToRemove: ['lasso2d', 'select2d', 'zoom2d', 'pan2d',
-                               'zoomIn2d', 'zoomOut2d', 'autoScale2d'],
+                               'zoomIn2d', 'zoomOut2d', 'autoScale2d']
+                              .concat(labelsRestyled() ? ['toImage'] : []),
       toImageButtonOptions: {
         format: 'png',
         filename: (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey',
@@ -445,10 +582,187 @@
     return { data: [trace], layout: layout, config: config, nodes: nodes };
   }
 
+  /* ── label orientation ────────────────────────────────────────────────── */
+  /* Plotly's Sankey has no label angle of its own.  It draws each label as a
+     <text x="0" y="0"> carrying a translate() to the point where the label
+     meets its node, so appending a rotate() to that transform turns the label
+     about exactly the right pivot: however far it swings it stays pinned to
+     its node.  Multi-line labels come through as tspans inside that same
+     <text>, so the whole stack turns together.
+
+     Plotly rewrites the transform on every draw — including node drags — so
+     this has to run again after each one. */
+  function angleTransform(base, angle) {
+    var clean = String(base || '').replace(/\s*rotate\([^)]*\)/g, '');
+    return angle ? (clean + ' rotate(' + angle + ')') : clean;
+  }
+
+  /* Which side of its node a label sits on is Plotly's decision, and it makes
+     it on x alone: past the middle of the figure the label flips inward. For a
+     contribution tree that is the wrong call — the deepest column is where the
+     long ecoinvent names are, and inward means straight over the diagram. So
+     the side is overridable, and buildFigure widens the margin to receive it. */
+  var TEXT_PAD = 3.25;                 // Plotly's own gap between node and text
+
+  function sideTransform(group, text) {
+    var side = state.labelSide;
+    if (side !== 'right' && side !== 'left') return null;
+    var rect = group.querySelector('rect.node-rect');
+    var w = rect ? parseFloat(rect.getAttribute('width')) : NaN;
+    if (!(w > 0)) w = state.thickness;
+    var m = /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/.exec(
+      text.getAttribute('transform') || '');
+    var y = m ? m[2] : '0';
+    text.setAttribute('text-anchor', side === 'right' ? 'start' : 'end');
+    // the tspans of a wrapped label are positioned relative to the anchor
+    var spans = text.querySelectorAll('tspan');
+    for (var i = 0; i < spans.length; i++) spans[i].setAttribute('x', '0');
+    return 'translate(' + (side === 'right' ? (w + TEXT_PAD) : -TEXT_PAD) +
+           ',' + y + ')';
+  }
+
+  /* Never restyle a half-drawn diagram.  Plotly removes the node groups of the
+     previous data set from an end-of-transition callback, and that transition
+     animates the very attribute we write — so touching `transform` while it is
+     running cancels it, the callback never fires, and the old nodes are left
+     stacked on top of the new ones.  Dropping the Levels slider from 4 to 3 on
+     a large tree left 215 stale labels piled over a 35-node diagram.
+
+     The node group count matching the figure we just built is the signal that
+     Plotly has finished; until it does, wait and look again. */
+  var styleRetry = null;
+
+  function applyLabelStyling() {
+    if (styleRetry) { clearTimeout(styleRetry); styleRetry = null; }
+    if (!labelsRestyled()) return;      // nothing to do, so touch nothing
+
+    var groups = gd.querySelectorAll('g.sankey-node');
+    var expected = lastFigure ? lastFigure.nodes.length : -1;
+    if (expected >= 0 && groups.length !== expected) {
+      styleRetry = setTimeout(applyLabelStyling, 60);
+      return;
+    }
+
+    var angle = state.labelAngle || 0;
+    for (var i = 0; i < groups.length; i++) {
+      var text = groups[i].querySelector('text.node-label');
+      if (!text) continue;
+      // side first: it rewrites the transform outright, which would drop a
+      // rotate() already sitting on it
+      var base = sideTransform(groups[i], text) ||
+                 text.getAttribute('transform');
+      text.setAttribute('transform', angleTransform(base, angle));
+    }
+  }
+
+  function labelsRestyled() {
+    return state.labelSide === 'right' || state.labelSide === 'left' ||
+           !!state.labelAngle;
+  }
+
+  /* The same two moves, applied to an exported SVG string.  Export cannot reuse
+     the live DOM: Plotly.toImage redraws the figure from its spec into a
+     throwaway div, which is a faithful copy of everything Plotly knows about
+     and nothing it doesn't.  Both export paths therefore patch the string. */
+  function restyleLabelsInSvg(svgText) {
+    var side = state.labelSide;
+    var angle = state.labelAngle || 0;
+    if (!labelsRestyled()) return svgText;
+    var flip = side === 'right' || side === 'left';
+    var x = side === 'right' ? (state.thickness + TEXT_PAD) : -TEXT_PAD;
+
+    return svgText.replace(/<text\b[^>]*>/g, function (tag) {
+      if (tag.indexOf('node-label') < 0) return tag;
+      var out = tag;
+      if (flip) {
+        out = out.replace(/text-anchor="[^"]*"/,
+                          'text-anchor="' + (side === 'right' ? 'start' : 'end') + '"');
+        out = out.replace(/\stransform="([^"]*)"/, function (all, tf) {
+          var m = /translate\(\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)\s*\)/.exec(tf);
+          return ' transform="translate(' + x + ',' + (m ? m[2] : '0') + ')"';
+        });
+      }
+      if (angle) {
+        if (/\stransform="/.test(out)) {
+          out = out.replace(/\stransform="([^"]*)"/, function (all, tf) {
+            return ' transform="' + angleTransform(tf, angle) + '"';
+          });
+        } else {
+          out = out.replace(/<text\b/, '<text transform="rotate(' + angle + ')"');
+        }
+      }
+      return out;
+    });
+  }
+
   /* ── render ───────────────────────────────────────────────────────────── */
   var lastFigure = null;
+  var drawnSignature = null;
+
+  /* Re-attached after every full redraw, because newPlot purges the div's
+     listeners along with its old contents.  Miss this and node selection
+     silently stops working after the first data change. */
+  function bindPlotEvents() {
+    if (!gd.on) return;
+    gd.on('plotly_click', function (ev) {
+      var pt = ev && ev.points && ev.points[0];
+      if (!pt) return;
+      // Sankey node points carry link lists; link points carry source/target.
+      if (pt.sourceLinks === undefined && pt.targetLinks === undefined) return;
+      var nodes = lastFigure ? lastFigure.nodes : [];
+      var name = nodes[pt.index != null ? pt.index : pt.pointNumber];
+      if (name) {
+        selectNode(name);
+        $('group-node').open = true;
+      }
+    });
+    gd.on('plotly_relayout', syncFromRelayout);
+    gd.on('plotly_restyle', syncFromRestyle);
+    // catches the draws we do not drive ourselves — node drags, resizes
+    gd.on('plotly_afterplot', applyLabelStyling);
+  }
+
+  /* Plotly.react does not clear a Sankey's old node groups when the node set
+     changes under it: it removes them from an end-of-transition callback, and
+     a second react arriving before that callback runs strands them in the DOM
+     for good.  Dragging the Levels slider is exactly that — one render per
+     input event — and on a large tree it leaves hundreds of stale labels
+     piled over the real diagram, while the status bar honestly reports the
+     small number the pipeline produced.
+
+     react does not re-run the Sankey layout either: hand it new node.x /
+     node.y and it keeps the positions it worked out on the first draw, so
+     switching Placement appeared to do nothing at all until something else
+     happened to change the node count.
+
+     Only a full redraw fixes either one.  react is still what we want for
+     changes that touch nothing but paint, where it is worth keeping for the
+     hover and drag state it preserves — so the signature below covers the node
+     set and the geometry, and anything outside it stays on react. */
+  function figureSignature(figure) {
+    var node = figure.data[0].node;
+    var xy = '';
+    if (node.x && node.y) {
+      for (var i = 0; i < node.x.length; i++) {
+        xy += Math.round(node.x[i] * 1e4) + ',' + Math.round(node.y[i] * 1e4) + ';';
+      }
+    }
+    return figure.nodes.join('\u0001') + '|' + node.pad + '|' + xy;
+  }
+
+  function draw(figure) {
+    var signature = figureSignature(figure);
+    if (signature === drawnSignature) {
+      Plotly.react(gd, figure.data, figure.layout, figure.config);
+      return;
+    }
+    Plotly.newPlot(gd, figure.data, figure.layout, figure.config);
+    drawnSignature = signature;
+    bindPlotEvents();          // newPlot drops every listener on the div
+  }
 
   function render() {
+    if (myGeneration !== generation) return;
     view = LCAFlows.buildFlows(PAYLOAD, {
       levels: state.levels,
       smallMode: state.smallMode,
@@ -462,6 +776,8 @@
       gd.innerHTML = '<p style="padding:32px;color:#898781">Nothing to draw at ' +
                      'these settings — raise the level count or lower the ' +
                      'threshold.</p>';
+      // the div no longer holds a plot, so the next draw has to build one
+      drawnSignature = null;
       updateStats();
       refreshInspector();
       buildKey();
@@ -470,7 +786,8 @@
     }
 
     lastFigure = buildFigure(view);
-    Plotly.react(gd, lastFigure.data, lastFigure.layout, lastFigure.config);
+    draw(lastFigure);
+    applyLabelStyling();
     updateStats();
     refreshInspector();
     buildKey();
@@ -562,6 +879,54 @@
         if (saved[k] !== undefined) state[k] = saved[k];
       });
     } catch (err) { /* corrupt or unavailable — fall back to defaults */ }
+  }
+
+  /* ── brand header ─────────────────────────────────────────────────────── */
+  /* The header's Light/Dark pair is a second face on the panel's Theme select
+     rather than its own setting, so the two can never disagree. */
+  function paintBrandTheme() {
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    var mode = activeTheme();
+    light.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+    dark.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
+  }
+
+  function afterThemeChange() {
+    document.documentElement.setAttribute(
+      'data-theme', state.theme === 'auto' ? '' : state.theme);
+    state.depthColors = null;
+    state.labelColor = null;
+    state.background = null;
+    state.borderColor = null;
+    $('c-labelcolor').value = themeInk();
+    $('c-bg').value = themeSurface();
+    buildDepthColors();
+    paintBrandTheme();
+  }
+
+  function wireBrandHeader() {
+    var source = $('brand-source');
+    if (source) source.textContent = META.source || '';
+
+    // the builders leave src empty when the mark is missing from gui_assets
+    var logo = $('brand-logo');
+    if (logo && !logo.getAttribute('src')) logo.hidden = true;
+
+    var light = $('brand-light'), dark = $('brand-dark');
+    if (!light || !dark) return;
+    function pick(mode) {
+      return function () {
+        state.theme = mode;
+        var sel = $('c-theme');
+        if (sel) sel.value = mode;
+        afterThemeChange();
+        render();
+      };
+    }
+    light.addEventListener('click', pick('light'));
+    dark.addEventListener('click', pick('dark'));
+    paintBrandTheme();
   }
 
   /* ── control binding ──────────────────────────────────────────────────── */
@@ -767,11 +1132,12 @@
     return { x: 0.5, y: 0.5 };
   }
 
-  function addAnnotation(text, pos, size) {
+  function addAnnotation(text, pos, size, angle) {
     state.annotations.push({
       text: text,
       x: pos.x, y: pos.y,
       size: size || state.labelSize + 1,
+      angle: angle || 0,
       color: state.labelColor || themeInk()
     });
     render();
@@ -833,14 +1199,78 @@
     return (META.source || 'sankey').replace(/\.[^.]+$/, '') + '-sankey';
   }
 
+  /* Rasterise an SVG string the way Plotly's own PNG path does — through an
+     <img> and a canvas.  The source is a data: URI rather than a blob: one so
+     the canvas stays untainted on file:// as well as over http. */
+  function rasterize(svgText, width, height, scale, done, fail) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.drawImage(img, 0, 0, width, height);
+        if (canvas.toBlob) canvas.toBlob(done, 'image/png');
+        else done(canvas.toDataURL('image/png'));
+      } catch (err) { fail(); }
+    };
+    img.onerror = fail;
+    img.src = 'data:image/svg+xml,' + encodeURIComponent(svgText);
+  }
+
   function exportImage(format) {
-    Plotly.downloadImage(gd, {
-      format: format,
-      filename: baseName(),
-      scale: format === 'svg' ? 1 : state.scale,
-      width: gd._fullLayout.width,
-      height: gd._fullLayout.height
-    });
+    var width = gd._fullLayout.width;
+    var height = gd._fullLayout.height;
+    var scale = format === 'svg' ? 1 : state.scale;
+
+    function plotlyDownload() {
+      Plotly.downloadImage(gd, {
+        format: format, filename: baseName(),
+        scale: scale, width: width, height: height
+      });
+    }
+
+    // Nothing to patch when the labels are level — keep Plotly's own path.
+    if (!labelsRestyled()) return plotlyDownload();
+
+    function giveUp() {
+      $('save-note').textContent =
+        'Could not export the rotated labels — saved the level version instead.';
+      plotlyDownload();
+    }
+
+    Plotly.toImage(gd, { format: 'svg', width: width, height: height })
+      .then(function (uri) {
+        var svg = restyleLabelsInSvg(
+          decodeURIComponent(uri.replace(/^data:image\/svg\+xml,/, '')));
+        if (format === 'svg') {
+          download(baseName() + '.svg', svg, 'image/svg+xml');
+          return;
+        }
+        rasterize(svg, width, height, scale, function (out) {
+          if (out && out.type) {                       // a Blob from toBlob
+            var url = URL.createObjectURL(out);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = baseName() + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          } else if (out) {                            // a data URI fallback
+            var link = document.createElement('a');
+            link.href = out;
+            link.download = baseName() + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          } else {
+            giveUp();
+          }
+        }, giveUp);
+      }, giveUp);
   }
 
   function exportCsv() {
@@ -948,6 +1378,10 @@
       return v ? v.toFixed(1) + '%' : 'all';
     });
     bindSelect('c-align', 'align');
+    bindSelect('c-labelside', 'labelSide');
+    bindRange('c-labelangle', 'labelAngle', function (v) {
+      return (v > 0 ? '+' : '') + v + '°';
+    });
     bindRange('c-decimals', 'decimals', function (v) { return String(v); });
     $('c-addtext').addEventListener('click', function () {
       // No prompt(): modal dialogs are blocked in sandboxed contexts, and the
@@ -961,17 +1395,7 @@
     });
 
     // colours
-    bindSelect('c-theme', 'theme', function () {
-      document.documentElement.setAttribute(
-        'data-theme', state.theme === 'auto' ? '' : state.theme);
-      state.depthColors = null;
-      state.labelColor = null;
-      state.background = null;
-      state.borderColor = null;
-      $('c-labelcolor').value = themeInk();
-      $('c-bg').value = themeSurface();
-      buildDepthColors();
-    });
+    bindSelect('c-theme', 'theme', afterThemeChange);
     bindSelect('c-palette', 'palette', function () {
       state.depthColors = null;
       buildDepthColors();
@@ -1025,7 +1449,7 @@
       var text = labelFor(selected, view) || selected;
       var pos = nodePaperPos(selected);
       editSelected({ hidden: true });
-      addAnnotation(text, pos);
+      addAnnotation(text, pos, null, state.labelAngle);
     });
     $('i-reset').addEventListener('click', function () {
       if (!selected) return;
@@ -1102,6 +1526,8 @@
       render();
     });
 
+    wireBrandHeader();
+
     // panel visibility
     $('c-hidepanel').addEventListener('click', function () {
       document.body.classList.add('panel-hidden');
@@ -1123,13 +1549,14 @@
       ['c-fontsize', 'fontSize'], ['c-labelsize', 'labelSize'],
       ['c-hoversize', 'hoverSize'], ['c-titlesize', 'titleSize'],
       ['c-wrap', 'wrap'], ['c-truncate', 'truncate'], ['c-decimals', 'decimals'],
-      ['c-labelcutoff', 'labelCutoff'],
+      ['c-labelcutoff', 'labelCutoff'], ['c-labelangle', 'labelAngle'],
       ['c-linkalpha', 'linkAlpha'], ['c-borderwidth', 'borderWidth'],
       ['c-pad', 'pad'], ['c-thickness', 'thickness'], ['c-height', 'height'],
       ['c-width', 'width'], ['c-marginx', 'marginX'],
       ['c-margintop', 'marginTop'], ['c-scale', 'scale'],
       ['c-font', 'font'], ['c-titlealign', 'titleAlign'],
       ['c-labelsource', 'labelSource'], ['c-align', 'align'],
+      ['c-labelside', 'labelSide'],
       ['c-theme', 'theme'], ['c-palette', 'palette'],
       ['c-linkmode', 'linkMode'], ['c-placement', 'placement'],
       ['c-arrangement', 'arrangement']
@@ -1157,6 +1584,7 @@
     Object.keys(repaintSeg).forEach(function (k) { repaintSeg[k](); });
     syncConditionalRows();
     buildDepthColors();
+    paintBrandTheme();
     suspendSync = false;
   }
 
@@ -1164,23 +1592,8 @@
   load();
   wire();
   applyStateToControls();
-  render();
+  render();                    // draw() binds the plot events on the first plot
   buildDepthColors();
-
-  gd.on('plotly_click', function (ev) {
-    var pt = ev && ev.points && ev.points[0];
-    if (!pt) return;
-    // Sankey node points carry link lists; link points carry source/target.
-    if (pt.sourceLinks === undefined && pt.targetLinks === undefined) return;
-    var nodes = lastFigure ? lastFigure.nodes : [];
-    var name = nodes[pt.index != null ? pt.index : pt.pointNumber];
-    if (name) {
-      selectNode(name);
-      $('group-node').open = true;
-    }
-  });
-  gd.on('plotly_relayout', syncFromRelayout);
-  gd.on('plotly_restyle', syncFromRestyle);
 
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1188,6 +1601,8 @@
     if (mq.addEventListener) mq.addEventListener('change', onScheme);
     else if (mq.addListener) mq.addListener(onScheme);
   }
+
+  if (typeof global.__lcaOnStarted === 'function') global.__lcaOnStarted();
 
   if (/[?&]dumpFlows=1/.test(location.search)) {
     var qs = function (name, fallback) {
@@ -1206,4 +1621,13 @@
     // also into the DOM, so `chrome --headless --dump-dom` can read it back
     $('flow-dump').textContent = dump;
   }
-}());
+  }
+
+  global.LCADashboard = { start: start };
+
+  /* A per-workbook build inlines its data as globals and starts straight away;
+     the drop-in app leaves PAYLOAD null and calls start() itself. */
+  if (typeof PAYLOAD !== 'undefined' && PAYLOAD && PAYLOAD.names) {
+    start(PAYLOAD, INITIAL, PALETTES);
+  }
+}(this));
