@@ -64,8 +64,8 @@ browser. Use an inlined build when working in a network-restricted environment.
 python build.py
 ```
 
-To check that the committed page matches its sources — useful in CI or a
-pre-commit hook:
+To check that the committed page matches its sources, without writing
+anything:
 
 ```bash
 python build.py --check
@@ -76,6 +76,23 @@ made only there are invisible to `sankey_assets/`. That is not hypothetical:
 the credit footer's stylesheet and the loading-screen logo were both added to
 the sources but missed in the page, and shipped broken until the build was
 reintroduced.
+
+### Enforcement
+
+`--check` runs on every push and pull request via
+[`.github/workflows/build-check.yml`](.github/workflows/build-check.yml), so a
+stale page cannot reach `main` unnoticed.
+
+To catch it before it leaves your machine, install the same check as a
+pre-commit hook:
+
+```bash
+printf '#!/bin/sh\nexec python build.py --check\n' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+Remove it with `rm .git/hooks/pre-commit`. Hooks are local and are not shared
+by cloning.
 
 ## Python tool
 

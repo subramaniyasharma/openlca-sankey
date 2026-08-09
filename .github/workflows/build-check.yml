@@ -1,0 +1,28 @@
+# Keeps index.html honest.
+#
+# index.html is generated from sankey_assets/ by build.py. It used to be
+# maintained by hand alongside those files, and twice a change landed in one
+# and not the other — the credit footer shipped unstyled, and the logo never
+# moved to the loading screen. This makes that impossible to merge rather than
+# merely possible to notice.
+name: build check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  index-is-current:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # build.py is standard library only, so there is nothing to install.
+      - name: index.html matches sankey_assets/
+        run: python build.py --check
