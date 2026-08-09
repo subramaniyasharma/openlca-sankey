@@ -394,8 +394,49 @@ body:not(.panel-hidden) #panel-toggle { display: none; }
 }
 
 @media print {
-  .panel, .stage-bar, #panel-toggle { display: none !important; }
+  .panel, .stage-bar, #panel-toggle, #site-credit { display: none !important; }
   body, .stage { background: #fff; }
+}
+
+/* permanent project credit and links */
+#site-credit {
+  position: fixed;
+  right: 14px;
+  bottom: 10px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 28px);
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--plane);
+  color: var(--ink-muted);
+  box-shadow: var(--shadow);
+  font-size: 10px;
+  line-height: 1.2;
+}
+#site-credit a { color: var(--accent); text-decoration: none; }
+#site-credit a:hover { text-decoration: underline; }
+#site-credit a + a { padding-left: 8px; border-left: 1px solid var(--rule); }
+
+@media (max-width: 720px) {
+  #site-credit {
+    position: static;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    max-width: none;
+    border: 0;
+    border-top: 1px solid var(--rule);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 8px 12px;
+  }
+}
+
+@media print {
+  #site-credit { display: none !important; }
 }
 
 /* ── drop-in build ──────────────────────────────────────────────────────── */

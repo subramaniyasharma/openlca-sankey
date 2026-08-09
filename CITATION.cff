@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use openLCA Sankey, please cite it using this file."
+title: "openLCA Sankey"
+type: software
+abstract: >-
+  A browser-based tool that turns openLCA contribution-tree Excel exports into
+  publication-quality, customizable Sankey diagrams.
+authors:
+  - given-names: Subramaniyasharma
+    family-names: Sivaraman
+    website: https://www.linkedin.com/in/subramaniyasharma-sivaraman-1246827a/
+version: 0.1.0
+date-released: 2026-08-08
+license: MIT
+repository-code: https://github.com/subramaniyasharma/openlca-sankey
+url: https://subramaniyasharma.github.io/openlca-sankey/
+keywords:
+  - openLCA
+  - life cycle assessment
+  - Sankey diagram
+  - data visualization
+  - sustainability

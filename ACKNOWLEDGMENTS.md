@@ -58,8 +58,8 @@ Development used standard Python tooling, a Chromium-based browser for
 headless dashboard checks, and Git/GitHub for version control and distribution.
 The project does not bundle or claim ownership of those tools.
 
-## License attribution
+## License and citation
 
-The [CRAPL](https://matt.might.net/articles/crapl/) was created by Matthew
-Might. The complete license text is included in
-[`CRAPL-LICENSE.txt`](CRAPL-LICENSE.txt).
+This repository is released under the [MIT License](LICENSE). Citation
+metadata is provided in [`CITATION.cff`](CITATION.cff), following the
+[Citation File Format](https://citation-file-format.github.io/).

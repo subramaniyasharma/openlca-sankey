@@ -1,71 +1,78 @@
 # openLCA Sankey
 
-Interactive Sankey diagrams from openLCA contribution-tree exports —
-directly in your browser.
+Interactive, publication-quality Sankey diagrams from openLCA contribution-tree Excel exports.
 
-**[→ Open the tool](https://subramaniyasharma.github.io/openlca-sankey/)**
+[Open the browser tool](https://subramaniyasharma.github.io/openlca-sankey/)
 
-Upload an Excel file exported from openLCA's *Result → Contribution tree →
-Export to Excel* workflow and explore it as a live, editable Sankey diagram.
-No Python, no server, no installation required. The workbook is read, parsed
-and drawn entirely in the page — nothing is uploaded, and whoever you send the
-file to needs no network.
+## Why this project exists
 
-## Features
+openLCA provides the data needed for contribution analysis, but the default Sankey presentation can be difficult to customize for a paper, report, or presentation. This project turns an openLCA contribution-tree export into a clear, editable diagram that is easier to explore and prepare for publication.
 
-- Branded for LEGACI: header band, lab accent colour and brand depth palette.
-- Explore contribution-tree depth with live level controls.
-- Show, pool, or hide small flows relative to their parent.
-- Inspect unbalanced trees or add a direct-emissions/unresolved remainder.
-- Edit labels, colours, fonts, node positions, and annotations.
-- Push the end nodes' labels out to the right of the diagram instead of over it.
-- Turn node labels to any angle between −90° and +90°, exports included.
-- Export PNG, SVG, CSV, and reusable style settings.
-- Use a numbered publication view with a process key.
-- Light/dark theme that follows your system preference.
+The goal is simple: make openLCA Sankey diagrams publication-quality, customizable, and easy to use without requiring a specialist dashboard setup.
 
-## How it works
+## What it does
 
-1. Open the tool in your browser.
-2. Drop (or browse for) your `.xlsx` contribution-tree export.
-3. The file is parsed **entirely in the browser** using native DOM decompression
-   and browser APIs.
-4. The interactive dashboard renders with [Plotly](https://plotly.com/javascript/).
+- Reads `.xlsx` contribution-tree exports from openLCA.
+- Explores contribution depth, small-flow handling, root balance, and node limits.
+- Customizes labels, fonts, colours, placement, annotations, and layout.
+- Supports light and dark themes, including a publication preset with a process key.
+- Exports PNG, SVG, CSV flow data, and reusable style settings.
+- Lets users inspect and edit individual node labels and colours.
 
-Two things that were build-time flags in the old CLI are live controls here,
-because the workbook is in memory: the payload depth cap, and the
-percentage below which links are dropped. A workbook with several sheets gets a
-sheet picker.
+## Quick start
 
-## Python tool
+1. In openLCA, open a result and choose **Contribution tree → Export to Excel**.
+2. [Open the tool](https://subramaniyasharma.github.io/openlca-sankey/).
+3. Drop the exported `.xlsx` file onto the loading page, or choose it from the file picker.
+4. Adjust the diagram with the controls panel and export the result.
 
-The original Python command-line tool and Windows GUI (`generate_sankey.py`, `sankey_gui.py`, etc.) that reads an
-Excel export and packages a self-contained HTML dashboard are preserved in the
-[`python-tool`](https://github.com/subramaniyasharma/openlca-sankey/tree/python-tool) branch.
+## Local, private, and offline
+
+The browser tool runs locally in the page. There is no application server, upload endpoint, database, or account required. The workbook is parsed in the browser and is not uploaded anywhere.
+
+The generated dashboard can be made fully self-contained for offline use by
+inlining Plotly (the default for `generate_sankey.py`). The lightweight public
+`index.html` uses the Plotly CDN to keep the repository and first page load
+small; its workbook parsing and Sankey processing still happen locally in the
+browser. Use an inlined build when working in a network-restricted environment.
 
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | The standalone browser tool (hosted via GitHub Pages). |
-| `sankey_assets/xlsx.js` | Minimal read-only `.xlsx` reader, no dependencies. |
-| `sankey_assets/parse.js` | The contribution-tree parser. |
-| `sankey_assets/app.js` | Drop-in build: file handling and sheet picking. |
-| `sankey_assets/flows.js` | The single browser-side flow pipeline. |
+| `index.html` | Standalone browser tool hosted through GitHub Pages. |
+| `sankey_assets/xlsx.js` | Minimal read-only `.xlsx` reader. |
+| `sankey_assets/parse.js` | Contribution-tree parser. |
+| `sankey_assets/app.js` | File loading, sheet selection, and loader error handling. |
+| `sankey_assets/flows.js` | Single browser-side flow pipeline. |
 | `sankey_assets/dashboard.js` | Controls, rendering, editing, persistence, and export. |
-| `sankey_assets/template.html` | Dashboard page structure. |
-| `sankey_assets/dashboard.css` | Dashboard layout and styling. |
+| `sankey_assets/template.html` | Source page structure. |
+| `sankey_assets/dashboard.css` | Source layout and styling. |
+| `CITATION.cff` | Machine-readable citation metadata. |
+| `ACKNOWLEDGMENTS.md` | Projects, libraries, references, and tools credited by the project. |
+| `LICENSE` | MIT open-source license. |
 
-*Note: The `index.html` file in this branch is pre-built from the `sankey_assets/`.*
+`index.html` is the checked-in browser build assembled from the files in `sankey_assets/`.
+
+## Python tool
+
+The original Python command-line tool and Windows GUI (`generate_sankey.py`, `sankey_gui.py`, and related files) are preserved in the [`python-tool` branch](https://github.com/subramaniyasharma/openlca-sankey/tree/python-tool).
+
+## Citation
+
+If you use openLCA Sankey in research, teaching, or a publication, please cite the project using [`CITATION.cff`](CITATION.cff). The file follows the [Citation File Format](https://citation-file-format.github.io/), which GitHub can use to display citation information for the repository.
 
 ## Acknowledgments
 
-See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the projects, libraries,
-reference implementations, and tools that informed this work.
+This project builds on openLCA, Plotly, Python tooling, and ideas from related open-source Sankey projects. See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the full list and the relevant links.
 
 ## License
 
-This project is released under the [Community Research and Academic
-Programming License (CRAPL)](CRAPL-LICENSE.txt). The CRAPL is intentionally
-research-oriented and includes important conditions around publication and
-modifications; read the license before using the software.
+This project is released under the [MIT License](LICENSE).
+
+## Links
+
+- [Repository](https://github.com/subramaniyasharma/openlca-sankey)
+- [MIT License](https://github.com/subramaniyasharma/openlca-sankey/blob/main/LICENSE)
+- [Citation File Format](https://citation-file-format.github.io/)
+- [Subramaniyasharma on LinkedIn](https://www.linkedin.com/in/subramaniyasharma-sivaraman-1246827a/)
