@@ -40,7 +40,10 @@ browser. Use an inlined build when working in a network-restricted environment.
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | Standalone browser tool hosted through GitHub Pages. |
+| `index.html` | **Generated** — the standalone browser tool served through GitHub Pages. Do not edit by hand. |
+| `build.py` | Assembles `index.html` from `sankey_assets/`. Standard library only. |
+| `sankey_assets/palettes.json` | Depth colour palettes inlined into the page. |
+| `assets/legaci-logo.png` | Logo, inlined as a data URI at build time. |
 | `sankey_assets/xlsx.js` | Minimal read-only `.xlsx` reader. |
 | `sankey_assets/parse.js` | Contribution-tree parser. |
 | `sankey_assets/app.js` | File loading, sheet selection, and loader error handling. |
@@ -52,11 +55,35 @@ browser. Use an inlined build when working in a network-restricted environment.
 | `ACKNOWLEDGMENTS.md` | Projects, libraries, references, and tools credited by the project. |
 | `LICENSE` | MIT open-source license. |
 
-`index.html` is the checked-in browser build assembled from the files in `sankey_assets/`.
+## Building
+
+`index.html` is a build artifact, not a source file. Edit the files in
+`sankey_assets/`, then regenerate it:
+
+```bash
+python build.py
+```
+
+To check that the committed page matches its sources — useful in CI or a
+pre-commit hook:
+
+```bash
+python build.py --check
+```
+
+Editing `index.html` directly will be overwritten by the next build, and edits
+made only there are invisible to `sankey_assets/`. That is not hypothetical:
+the credit footer's stylesheet and the loading-screen logo were both added to
+the sources but missed in the page, and shipped broken until the build was
+reintroduced.
 
 ## Python tool
 
-The original Python command-line tool and Windows GUI (`generate_sankey.py`, `sankey_gui.py`, and related files) are preserved in the [`python-tool` branch](https://github.com/subramaniyasharma/openlca-sankey/tree/python-tool).
+The original Python command-line generator (`generate_sankey.py`) is preserved
+in the [`python-tool` branch](https://github.com/subramaniyasharma/openlca-sankey/tree/python-tool).
+The Windows GUI (`sankey_gui.py`), the packager and the parser parity harness
+(`tools/verify_parse.py`) are not on that branch — they are on
+[`test1`](https://github.com/subramaniyasharma/openlca-sankey/tree/test1).
 
 ## Citation
 

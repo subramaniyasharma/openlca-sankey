@@ -1,0 +1,95 @@
+{
+  "legaci": {
+    "label": "LEGACI brand",
+    "light": [
+      "#2f7d4f",
+      "#b8912f",
+      "#2c7a85",
+      "#6a9a3a",
+      "#8a6d3b",
+      "#5f5a4e"
+    ],
+    "dark": [
+      "#4e9e6a",
+      "#c8a24a",
+      "#3e8e9c",
+      "#7fb25a",
+      "#9a7b4f",
+      "#6f6a5e"
+    ]
+  },
+  "categorical": {
+    "label": "Categorical (validated)",
+    "light": [
+      "#2a78d6",
+      "#eb6834",
+      "#1baf7a",
+      "#eda100",
+      "#e87ba4",
+      "#008300"
+    ],
+    "dark": [
+      "#3987e5",
+      "#d95926",
+      "#199e70",
+      "#c98500",
+      "#d55181",
+      "#008300"
+    ]
+  },
+  "depth-ramp": {
+    "label": "Depth ramp — blue (max 5)",
+    "light": [
+      "#0d366b",
+      "#184f95",
+      "#256abf",
+      "#3987e5",
+      "#6da7ec"
+    ],
+    "dark": [
+      "#cde2fb",
+      "#9ec5f4",
+      "#6da7ec",
+      "#3987e5",
+      "#256abf"
+    ]
+  },
+  "print": {
+    "label": "Print / grayscale",
+    "light": [
+      "#31291d",
+      "#494135",
+      "#625a4e",
+      "#7d7569",
+      "#989084",
+      "#b5ada1"
+    ],
+    "dark": [
+      "#645c50",
+      "#7a7266",
+      "#91897d",
+      "#a8a094",
+      "#bfb7ab",
+      "#d8d0c4"
+    ]
+  },
+  "legacy": {
+    "label": "Legacy (original script — fails a11y checks)",
+    "light": [
+      "#1B4F72",
+      "#2E86C1",
+      "#17A589",
+      "#D4AC0D",
+      "#CA6F1E",
+      "#884EA0"
+    ],
+    "dark": [
+      "#1B4F72",
+      "#2E86C1",
+      "#17A589",
+      "#D4AC0D",
+      "#CA6F1E",
+      "#884EA0"
+    ]
+  }
+}
