@@ -14,21 +14,6 @@ The LEGACI logo in `gui_assets/` is the laboratory's own mark, taken from the
 site above and used here with the laboratory's work; it is not covered by this
 repository's license.
 
-The dashboard's brand header, accent colour and depth palette come from the
-lab's **LEGACI Sankey Mockups** in Claude Design ("Live dashboard UI mockups"),
-which is built on the BEAS/Grenfell design system. That system's type pairing —
-Calibri for the wordmark, Arial for functional labels — is followed through the
-font stacks; the metric-compatible open-source substitutes it ships (Carlito,
-Arimo) are named first in the stack but not fetched, because a generated
-dashboard has to work with no network at all.
-
-The desktop app's colours and typography follow the published Grenfell Campus
-and Memorial University visual identity, but no Memorial trademark or logo file
-is vendored here. Memorial's corporate typeface (Avenir) is licensed and is not
-redistributed; the app falls back to faces installed with Windows. The official
-Grenfell Campus logo is available from [Memorial's Marketing &
-Communications](https://www.mun.ca/marcomm/memorials-brand/logos/grenfell-campus-logos/)
-and can be dropped in as `gui_assets/grenfell-logo.png`.
 
 ## Ecosystem and reference work
 
